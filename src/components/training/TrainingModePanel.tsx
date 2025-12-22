@@ -7,8 +7,7 @@ import { SelectorMapping } from '@/types/training';
 import { useTraining } from '@/hooks/useTraining';
 import { SelectorList } from './SelectorList';
 import { ColumnMappingDialog } from './ColumnMappingDialog';
-import { SelectorCaptureTool } from './SelectorCaptureTool';
-import { Globe, Play, Save, Trash2, ExternalLink } from 'lucide-react';
+import { Globe, Play, Save, Trash2, ExternalLink, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface TrainingModePanelProps {
@@ -35,20 +34,10 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
       return;
     }
     setIsPageLoaded(true);
-    toast.success('Ready! Use the selector tool below to capture elements from the product page.');
+    toast.success('Ready! Add selectors to capture elements from product pages.');
   }, [testUrl, manufacturer]);
 
-  const handleSelectorCaptured = useCallback((selector: string, type: 'css' | 'xpath') => {
-    setPendingSelector({
-      id: crypto.randomUUID(),
-      xpath: type === 'xpath' ? selector : '',
-      cssSelector: type === 'css' ? selector : '',
-      type: 'text',
-    });
-    setIsDialogOpen(true);
-  }, []);
-
-  const handleAddManualSelector = useCallback(() => {
+  const handleAddSelector = useCallback(() => {
     setPendingSelector({
       id: crypto.randomUUID(),
       xpath: '',
@@ -102,11 +91,10 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
             Training Mode
           </CardTitle>
           <CardDescription>
-            Train the system to extract assets from manufacturer product pages
+            Train the system to extract assets from manufacturer product pages using CSS selectors or XPath
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Manufacturer Input */}
           <div className="space-y-2">
             <Label htmlFor="manufacturer">Manufacturer Name</Label>
             <Input
@@ -118,7 +106,6 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
             />
           </div>
 
-          {/* URL Input */}
           <div className="space-y-2">
             <Label htmlFor="testUrl">Test Product Page URL</Label>
             <div className="flex gap-2">
@@ -133,19 +120,18 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
               {!isPageLoaded && (
                 <Button onClick={handleLoadPage} disabled={!testUrl || !manufacturer}>
                   <Play className="w-4 h-4 mr-2" />
-                  Load
+                  Start
                 </Button>
               )}
             </div>
           </div>
 
-          {/* Page Ready Info & Selector Tool */}
           {isPageLoaded && (
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 rounded-lg bg-accent/30 border border-accent">
                 <div className="flex items-center gap-2">
                   <ExternalLink className="w-4 h-4 text-accent-foreground" />
-                  <span className="text-sm font-medium">Page Ready: {manufacturer}</span>
+                  <span className="text-sm font-medium">Training: {manufacturer}</span>
                 </div>
                 <Button
                   variant="outline"
@@ -153,29 +139,29 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
                   onClick={() => window.open(testUrl, '_blank')}
                 >
                   <ExternalLink className="w-4 h-4 mr-1" />
-                  Open Product Page
+                  Open Page
                 </Button>
               </div>
+
+              <div className="p-4 rounded-lg bg-muted/50 border border-border">
+                <p className="text-sm font-medium mb-2">How to get selectors:</p>
+                <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                  <li>Open the product page in a new tab</li>
+                  <li>Right-click on the element → Inspect</li>
+                  <li>Right-click on the HTML → Copy → Copy XPath or Copy Selector</li>
+                  <li>Click "Add Selector" and paste it</li>
+                </ol>
+              </div>
+
+              <Button onClick={handleAddSelector} className="w-full">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Selector
+              </Button>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Selector Capture Tool */}
-      {isPageLoaded && (
-        <SelectorCaptureTool onSelectorCaptured={handleSelectorCaptured} />
-      )}
-
-      {/* Add Manual Selector Button */}
-      {isPageLoaded && (
-        <div className="flex justify-center">
-          <Button variant="outline" onClick={handleAddManualSelector}>
-            Or Add Selector Manually
-          </Button>
-        </div>
-      )}
-
-      {/* Selector List */}
       {selectors.length > 0 && (
         <SelectorList
           selectors={selectors}
@@ -183,7 +169,6 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
         />
       )}
 
-      {/* Action Buttons */}
       {isPageLoaded && (
         <div className="flex justify-between">
           <Button variant="outline" onClick={handleClear}>
@@ -193,7 +178,6 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
           <Button
             onClick={handleSaveTraining}
             disabled={selectors.length === 0 || isLoading}
-            variant="glow"
           >
             <Save className="w-4 h-4 mr-2" />
             {isLoading ? 'Saving...' : 'Save Training'}
@@ -201,7 +185,6 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
         </div>
       )}
 
-      {/* Column Mapping Dialog */}
       <ColumnMappingDialog
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
