@@ -2,3 +2,6 @@ project_id = "ldlrhoyklfvcctmuewqf"
 
 [functions.enrich-product]
 verify_jwt = false
+
+[functions.scrape-assets]
+verify_jwt = false
