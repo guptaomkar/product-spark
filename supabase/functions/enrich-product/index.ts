@@ -41,10 +41,11 @@ serve(async (req) => {
       );
     }
 
-    // Build the query for Oxylabs AI mode
-    const attributeList = attributes.join(', ');
-    const query = `provide list of attributes for ${mfr} ${mpn}\nattribute list: ${attributeList}`;
+    // Build the query for Oxylabs AI mode with strict JSON format
+    // Keep query short to avoid 400 character limit
+    const query = `JSON only for ${mfr} ${mpn}: {"attributes":{${attributes.slice(0, 10).map(a => `"${a}":"val"`).join(',')}}}`;
 
+    console.log(`[enrich-product] Query length: ${query.length}`);
     console.log(`[enrich-product] Query: ${query}`);
 
     const payload = {
@@ -80,11 +81,11 @@ serve(async (req) => {
 
     // Extract response_text from Oxylabs response
     const responseText = extractResponseText(data);
-    console.log(`[enrich-product] Extracted response: ${responseText.substring(0, 200)}...`);
+    console.log(`[enrich-product] Extracted response: ${responseText.substring(0, 500)}...`);
 
     // Parse the response to extract attribute values
     const enrichedData = parseAttributeValues(responseText, attributes);
-    console.log(`[enrich-product] Parsed attributes:`, enrichedData);
+    console.log(`[enrich-product] Parsed attributes:`, JSON.stringify(enrichedData, null, 2));
 
     return new Response(
       JSON.stringify({ success: true, data: enrichedData }),
@@ -117,54 +118,69 @@ function extractResponseText(data: any): string {
 function parseAttributeValues(responseText: string, attributes: string[]): Record<string, string> {
   const result: Record<string, string> = {};
   
+  // Initialize all attributes with empty strings
+  for (const attr of attributes) {
+    result[attr] = '';
+  }
+  
   // Try to parse as JSON first
   try {
-    // Look for JSON in the response
+    // Look for JSON object in the response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      // Map parsed values to our attributes
+      
+      // Check if it has the "attributes" structure
+      if (parsed.attributes && typeof parsed.attributes === 'object') {
+        for (const attr of attributes) {
+          if (parsed.attributes[attr] !== undefined && parsed.attributes[attr] !== '') {
+            result[attr] = String(parsed.attributes[attr]);
+          }
+        }
+        return result;
+      }
+      
+      // Fallback: try direct key matching for each attribute
       for (const attr of attributes) {
-        const lowerAttr = attr.toLowerCase().replace(/\s+/g, '_');
-        // Check various possible key formats
+        // Try exact match first
+        if (parsed[attr] !== undefined && parsed[attr] !== '') {
+          result[attr] = String(parsed[attr]);
+          continue;
+        }
+        
+        // Try case-insensitive and normalized matching
+        const normalizedAttr = attr.toLowerCase().replace(/[\s_\-\.]+/g, '');
         for (const [key, value] of Object.entries(parsed)) {
-          const lowerKey = key.toLowerCase().replace(/\s+/g, '_');
-          if (lowerKey === lowerAttr || lowerKey.includes(lowerAttr) || lowerAttr.includes(lowerKey)) {
+          if (value === null || value === undefined || value === '') continue;
+          const normalizedKey = key.toLowerCase().replace(/[\s_\-\.]+/g, '');
+          if (normalizedKey === normalizedAttr) {
             result[attr] = String(value);
             break;
           }
         }
       }
-      // If we got some results from JSON, return them
-      if (Object.keys(result).length > 0) {
-        return result;
-      }
     }
-  } catch {
-    // JSON parsing failed, try text extraction
-  }
+  } catch (e) {
+    console.log('[enrich-product] JSON parsing failed, trying text extraction:', e);
+    
+    // Text-based extraction as fallback
+    for (const attr of attributes) {
+      // Look for patterns like "Attribute: Value" or "Attribute - Value"
+      const escapedAttr = attr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const patterns = [
+        new RegExp(`"${escapedAttr}"\\s*:\\s*"([^"]+)"`, 'i'),
+        new RegExp(`${escapedAttr}\\s*:\\s*([^\\n,;]+)`, 'i'),
+      ];
 
-  // Text-based extraction
-  for (const attr of attributes) {
-    // Look for patterns like "Attribute: Value" or "Attribute - Value" or "Attribute = Value"
-    const patterns = [
-      new RegExp(`${escapeRegex(attr)}[:\\-=]\\s*([^\\n,;]+)`, 'i'),
-      new RegExp(`${escapeRegex(attr)}\\s*[:\\-=]?\\s*"([^"]+)"`, 'i'),
-      new RegExp(`"${escapeRegex(attr)}"[:\\s]*"([^"]+)"`, 'i'),
-    ];
-
-    for (const pattern of patterns) {
-      const match = responseText.match(pattern);
-      if (match && match[1]) {
-        result[attr] = match[1].trim();
-        break;
+      for (const pattern of patterns) {
+        const match = responseText.match(pattern);
+        if (match && match[1] && match[1].trim()) {
+          result[attr] = match[1].trim();
+          break;
+        }
       }
     }
   }
 
   return result;
-}
-
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
