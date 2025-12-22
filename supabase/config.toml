@@ -1,1 +1,4 @@
 project_id = "ldlrhoyklfvcctmuewqf"
+
+[functions.enrich-product]
+verify_jwt = false

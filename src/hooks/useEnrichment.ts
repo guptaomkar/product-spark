@@ -1,48 +1,36 @@
 import { useState, useCallback, useMemo } from 'react';
 import { Product, AttributeDefinition, EnrichmentStats, FileValidationResult } from '@/types/enrichment';
 import { getAttributesForCategory, exportToExcel } from '@/lib/fileParser';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
-// Simulated enrichment for demo purposes
-const simulateEnrichment = async (
+// Real enrichment using Oxylabs API via edge function
+const enrichProduct = async (
   product: Product, 
   attributes: string[]
 ): Promise<Record<string, string>> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+  console.log(`[enrichProduct] Calling edge function for ${product.mfr} ${product.mpn}`);
   
-  // Simulate occasional failures (10% chance)
-  if (Math.random() < 0.1) {
-    throw new Error('AI service temporarily unavailable');
-  }
-  
-  // Generate mock enriched data
-  const enrichedData: Record<string, string> = {};
-  attributes.forEach(attr => {
-    // Simulate partial data (20% chance of empty value)
-    if (Math.random() > 0.2) {
-      enrichedData[attr] = generateMockValue(attr, product);
-    } else {
-      enrichedData[attr] = '';
+  const { data, error } = await supabase.functions.invoke('enrich-product', {
+    body: { 
+      mfr: product.mfr, 
+      mpn: product.mpn, 
+      attributes 
     }
   });
-  
-  return enrichedData;
-};
 
-const generateMockValue = (attribute: string, product: Product): string => {
-  const mockValues: Record<string, string[]> = {
-    'Voltage': ['12V', '24V', '110V', '220V', '5V DC'],
-    'Wattage': ['10W', '25W', '50W', '100W', '250W'],
-    'Weight': ['0.5 kg', '1.2 kg', '2.5 kg', '5 kg', '10 kg'],
-    'Dimensions': ['100x50x25mm', '200x100x50mm', '300x150x75mm'],
-    'Material': ['Aluminum', 'Steel', 'Plastic', 'Copper', 'Composite'],
-    'Color': ['Black', 'Silver', 'White', 'Gray', 'Blue'],
-    'Temperature Range': ['-20°C to 60°C', '0°C to 85°C', '-40°C to 125°C'],
-    'Certification': ['CE', 'UL', 'RoHS', 'FCC', 'ISO 9001'],
-  };
-  
-  const values = mockValues[attribute] || [`${product.mfr} ${attribute} Spec`];
-  return values[Math.floor(Math.random() * values.length)];
+  if (error) {
+    console.error('[enrichProduct] Edge function error:', error);
+    throw new Error(error.message || 'Failed to call enrichment service');
+  }
+
+  if (!data.success) {
+    console.error('[enrichProduct] Enrichment failed:', data.error);
+    throw new Error(data.error || 'Enrichment failed');
+  }
+
+  console.log('[enrichProduct] Enrichment successful:', data.data);
+  return data.data || {};
 };
 
 export function useEnrichment() {
@@ -83,7 +71,7 @@ export function useEnrichment() {
       
       try {
         const categoryAttributes = getAttributesForCategory(product.category, attributes);
-        const enrichedData = await simulateEnrichment(product, categoryAttributes);
+        const enrichedData = await enrichProduct(product, categoryAttributes);
         
         // Check if we got all values or just some
         const filledValues = Object.values(enrichedData).filter(v => v !== '').length;

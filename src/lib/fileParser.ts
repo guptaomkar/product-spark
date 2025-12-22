@@ -136,24 +136,21 @@ export function exportToExcel(
   products: Product[],
   attributes: AttributeDefinition[]
 ): Blob {
-  // Get all unique attribute names
-  const allAttributes = [...new Set(attributes.map(a => a.attributeName))];
+  // Create export data in the format: MFR | MPN | Attribute Name | Attribute Value
+  const exportData: { MFR: string; MPN: string; 'Attribute Name': string; 'Attribute Value': string }[] = [];
   
-  // Create export data
-  const exportData = products.map(product => {
-    const row: Record<string, string> = {
-      MFR: product.mfr,
-      MPN: product.mpn,
-      Category: product.category,
-      Status: product.status
-    };
+  products.forEach(product => {
+    // Get attributes for this product's category
+    const categoryAttributes = getAttributesForCategory(product.category, attributes);
     
-    // Add attribute columns
-    allAttributes.forEach(attr => {
-      row[attr] = product.enrichedData?.[attr] || '';
+    categoryAttributes.forEach(attrName => {
+      exportData.push({
+        MFR: product.mfr,
+        MPN: product.mpn,
+        'Attribute Name': attrName,
+        'Attribute Value': product.enrichedData?.[attrName] || ''
+      });
     });
-    
-    return row;
   });
   
   const worksheet = XLSX.utils.json_to_sheet(exportData);
