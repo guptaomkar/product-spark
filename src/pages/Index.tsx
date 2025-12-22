@@ -1,11 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Header } from '@/components/layout/Header';
 import { FileUpload } from '@/components/upload/FileUpload';
 import { ProductTable } from '@/components/enrichment/ProductTable';
 import { StatsBar } from '@/components/enrichment/StatsBar';
 import { AttributePreview } from '@/components/enrichment/AttributePreview';
 import { useEnrichment } from '@/hooks/useEnrichment';
+import { TrainingModePanel } from '@/components/training/TrainingModePanel';
+import { SavedTrainingsList } from '@/components/training/SavedTrainingsList';
+import { BulkScrapePanel } from '@/components/training/BulkScrapePanel';
+import { useTraining } from '@/hooks/useTraining';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Play, 
   Download, 
@@ -13,7 +18,9 @@ import {
   Trash2,
   FileSpreadsheet,
   Sparkles,
-  ArrowRight 
+  ArrowRight,
+  GraduationCap,
+  Database
 } from 'lucide-react';
 
 const Index = () => {
@@ -29,6 +36,13 @@ const Index = () => {
     clearData,
   } = useEnrichment();
 
+  const { trainings, fetchTrainings } = useTraining();
+  const [activeTab, setActiveTab] = useState('enrichment');
+
+  useEffect(() => {
+    fetchTrainings();
+  }, [fetchTrainings]);
+
   const hasData = products.length > 0;
   const isComplete = stats.pending === 0 && stats.processing === 0 && hasData;
 
@@ -37,111 +51,186 @@ const Index = () => {
       <Header />
       
       <main className="container mx-auto px-6 py-8">
-        {!hasData ? (
-          <div className="max-w-4xl mx-auto">
-            {/* Hero Section */}
-            <div className="text-center mb-12 animate-fade-in">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
-                <Sparkles className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium text-primary">AI-Powered Enrichment</span>
-              </div>
-              
-              <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-                Product Data <span className="text-gradient">Enrichment</span>
-              </h1>
-              <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Transform your product catalog with intelligent attribute extraction. 
-                Upload your data, define attributes, and let AI do the rest.
-              </p>
-            </div>
-            
-            {/* Features Grid */}
-            <div className="grid md:grid-cols-3 gap-4 mb-12 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-              {[
-                { icon: FileSpreadsheet, title: 'Multi-Sheet Input', desc: 'Products + attribute definitions' },
-                { icon: Sparkles, title: 'AI Intelligence', desc: 'Automated specification lookup' },
-                { icon: Download, title: 'Clean Export', desc: 'Excel-ready structured output' },
-              ].map((feature, i) => (
-                <div key={i} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
-                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                    <feature.icon className="w-5 h-5 text-primary" />
+        {/* Main Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full max-w-md grid-cols-3 mx-auto">
+            <TabsTrigger value="enrichment" className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4" />
+              AI Enrichment
+            </TabsTrigger>
+            <TabsTrigger value="training" className="flex items-center gap-2">
+              <GraduationCap className="w-4 h-4" />
+              Training
+            </TabsTrigger>
+            <TabsTrigger value="bulk" className="flex items-center gap-2">
+              <Database className="w-4 h-4" />
+              Bulk Scrape
+            </TabsTrigger>
+          </TabsList>
+
+          {/* AI Enrichment Tab */}
+          <TabsContent value="enrichment">
+            {!hasData ? (
+              <div className="max-w-4xl mx-auto">
+                {/* Hero Section */}
+                <div className="text-center mb-12 animate-fade-in">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">AI-Powered Enrichment</span>
                   </div>
-                  <h3 className="font-semibold text-foreground mb-1">{feature.title}</h3>
-                  <p className="text-sm text-muted-foreground">{feature.desc}</p>
+                  
+                  <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+                    Product Data <span className="text-gradient">Enrichment</span>
+                  </h1>
+                  <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                    Transform your product catalog with intelligent attribute extraction. 
+                    Upload your data, define attributes, and let AI do the rest.
+                  </p>
                 </div>
-              ))}
-            </div>
-            
-            {/* File Upload */}
-            <FileUpload onFileProcessed={loadData} />
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Action Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in">
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">Enrichment Dashboard</h2>
-                <p className="text-sm text-muted-foreground">
-                  {products.length} products • {attributes.length} attribute mappings
+                
+                {/* Features Grid */}
+                <div className="grid md:grid-cols-3 gap-4 mb-12 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                  {[
+                    { icon: FileSpreadsheet, title: 'Multi-Sheet Input', desc: 'Products + attribute definitions' },
+                    { icon: Sparkles, title: 'AI Intelligence', desc: 'Automated specification lookup' },
+                    { icon: Download, title: 'Clean Export', desc: 'Excel-ready structured output' },
+                  ].map((feature, i) => (
+                    <div key={i} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                        <feature.icon className="w-5 h-5 text-primary" />
+                      </div>
+                      <h3 className="font-semibold text-foreground mb-1">{feature.title}</h3>
+                      <p className="text-sm text-muted-foreground">{feature.desc}</p>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* File Upload */}
+                <FileUpload onFileProcessed={loadData} />
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Action Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in">
+                  <div>
+                    <h2 className="text-xl font-semibold text-foreground">Enrichment Dashboard</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {products.length} products • {attributes.length} attribute mappings
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {!isComplete && (
+                      <Button
+                        onClick={startEnrichment}
+                        disabled={isEnriching || stats.pending === 0}
+                        variant={isEnriching ? 'secondary' : 'glow'}
+                        size="lg"
+                      >
+                        {isEnriching ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-4 h-4" />
+                            Start Enrichment
+                            <ArrowRight className="w-4 h-4" />
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    
+                    {isComplete && (
+                      <Button onClick={downloadResults} variant="success" size="lg">
+                        <Download className="w-4 h-4" />
+                        Download Results
+                      </Button>
+                    )}
+                    
+                    <Button onClick={resetEnrichment} variant="outline" disabled={isEnriching}>
+                      <RotateCcw className="w-4 h-4" />
+                      Reset
+                    </Button>
+                    
+                    <Button onClick={clearData} variant="ghost" disabled={isEnriching}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                
+                {/* Stats */}
+                <StatsBar stats={stats} />
+                
+                {/* Attribute Preview (collapsible) */}
+                <details className="group" open>
+                  <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-4">
+                    View Attribute Mappings
+                  </summary>
+                  <AttributePreview attributes={attributes} />
+                </details>
+                
+                {/* Product Table */}
+                <ProductTable products={products} attributes={attributes} />
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Training Mode Tab */}
+          <TabsContent value="training">
+            <div className="max-w-4xl mx-auto space-y-8">
+              {/* Hero Section */}
+              <div className="text-center mb-8 animate-fade-in">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+                  <GraduationCap className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-primary">Visual Selector Training</span>
+                </div>
+                
+                <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                  Train <span className="text-gradient">Asset Scraping</span>
+                </h1>
+                <p className="text-muted-foreground max-w-2xl mx-auto">
+                  Teach the system how to extract images, datasheets, and specifications 
+                  from manufacturer product pages. Training is reusable for bulk operations.
                 </p>
               </div>
-              
-              <div className="flex items-center gap-2">
-                {!isComplete && (
-                  <Button
-                    onClick={startEnrichment}
-                    disabled={isEnriching || stats.pending === 0}
-                    variant={isEnriching ? 'secondary' : 'glow'}
-                    size="lg"
-                  >
-                    {isEnriching ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="w-4 h-4" />
-                        Start Enrichment
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </Button>
-                )}
-                
-                {isComplete && (
-                  <Button onClick={downloadResults} variant="success" size="lg">
-                    <Download className="w-4 h-4" />
-                    Download Results
-                  </Button>
-                )}
-                
-                <Button onClick={resetEnrichment} variant="outline" disabled={isEnriching}>
-                  <RotateCcw className="w-4 h-4" />
-                  Reset
-                </Button>
-                
-                <Button onClick={clearData} variant="ghost" disabled={isEnriching}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
+
+              {/* Training Panel */}
+              <TrainingModePanel onComplete={fetchTrainings} />
+
+              {/* Saved Trainings */}
+              <SavedTrainingsList />
             </div>
-            
-            {/* Stats */}
-            <StatsBar stats={stats} />
-            
-            {/* Attribute Preview (collapsible) */}
-            <details className="group" open>
-              <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-4">
-                View Attribute Mappings
-              </summary>
-              <AttributePreview attributes={attributes} />
-            </details>
-            
-            {/* Product Table */}
-            <ProductTable products={products} attributes={attributes} />
-          </div>
-        )}
+          </TabsContent>
+
+          {/* Bulk Scrape Tab */}
+          <TabsContent value="bulk">
+            <div className="max-w-4xl mx-auto space-y-8">
+              {/* Hero Section */}
+              <div className="text-center mb-8 animate-fade-in">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+                  <Database className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-primary">Bulk Asset Extraction</span>
+                </div>
+                
+                <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                  Bulk <span className="text-gradient">Scraping Mode</span>
+                </h1>
+                <p className="text-muted-foreground max-w-2xl mx-auto">
+                  Use your trained extraction rules to scrape assets from multiple 
+                  product URLs at once. Each asset maps to its own column.
+                </p>
+              </div>
+
+              {/* Bulk Scrape Panel */}
+              <BulkScrapePanel trainings={trainings} />
+
+              {/* Saved Trainings Reference */}
+              <SavedTrainingsList />
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
       
       {/* Footer */}
