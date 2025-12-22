@@ -12,14 +12,7 @@ interface EnrichmentRequest {
   attributes: string[];
 }
 
-interface EnrichmentResponse {
-  success: boolean;
-  data?: Record<string, string>;
-  error?: string;
-}
-
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -28,7 +21,7 @@ serve(async (req) => {
     const { mfr, mpn, attributes } = (await req.json()) as EnrichmentRequest;
 
     console.log(`[enrich-product] Processing: ${mfr} ${mpn}`);
-    console.log(`[enrich-product] Attributes requested: ${attributes.join(", ")}`);
+    console.log(`[enrich-product] Total attributes: ${attributes.length}`);
 
     const username = Deno.env.get("OXYLABS_USERNAME");
     const password = Deno.env.get("OXYLABS_PASSWORD");
@@ -41,58 +34,97 @@ serve(async (req) => {
       });
     }
 
-    // Build the query for Oxylabs AI mode with ALL attributes
-    // Create a detailed prompt for better extraction quality
-    const attributeList = attributes.join(", ");
-    const query = `Find complete product specifications for manufacturer "${mfr}" part number "${mpn}".
-Return ONLY valid JSON with this exact structure (no text before or after):
-{"attributes":{${attributes.map((a) => `"${a}":"value or empty string"`).join(",")}}}
-Required attributes: ${attributeList}
-Rules: Each attribute must be a separate key. Use exact attribute names. Return "" for unknown values. No arrays or nested objects.`;
-
-    console.log(`[enrich-product] Query length: ${query.length}`);
-    console.log(`[enrich-product] Query: ${query}`);
-
-    const payload = {
-      source: "google_ai_mode",
-      query: query,
-      geo_location: "United States",
-      parse: true,
-      render: "html",
-    };
-
     const authHeader = btoa(`${username}:${password}`);
-
-    const response = await fetch("https://realtime.oxylabs.io/v1/queries", {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${authHeader}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[enrich-product] Oxylabs API error: ${response.status} - ${errorText}`);
-      return new Response(JSON.stringify({ success: false, error: `Oxylabs API error: ${response.status}` }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const allResults: Record<string, string> = {};
+    
+    // Initialize all attributes
+    for (const attr of attributes) {
+      allResults[attr] = "";
     }
 
-    const data = await response.json();
-    console.log(`[enrich-product] Oxylabs response received`);
+    // Split attributes into batches that fit within 400 char query limit
+    // Base query: "JSON specs for MFR MPN: " ~30 chars + attributes
+    const baseQueryLength = `JSON specs for ${mfr} ${mpn}: `.length;
+    const maxAttrChars = 350 - baseQueryLength; // Leave buffer
+    
+    const batches: string[][] = [];
+    let currentBatch: string[] = [];
+    let currentLength = 0;
 
-    // Extract response_text from Oxylabs response
-    const responseText = extractResponseText(data);
-    console.log(`[enrich-product] Extracted response: ${responseText.substring(0, 500)}...`);
+    for (const attr of attributes) {
+      const attrWithComma = currentBatch.length > 0 ? `, ${attr}` : attr;
+      if (currentLength + attrWithComma.length > maxAttrChars) {
+        if (currentBatch.length > 0) {
+          batches.push(currentBatch);
+        }
+        currentBatch = [attr];
+        currentLength = attr.length;
+      } else {
+        currentBatch.push(attr);
+        currentLength += attrWithComma.length;
+      }
+    }
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
 
-    // Parse the response to extract attribute values
-    const enrichedData = parseAttributeValues(responseText, attributes);
-    console.log(`[enrich-product] Parsed attributes:`, JSON.stringify(enrichedData, null, 2));
+    console.log(`[enrich-product] Split into ${batches.length} batches`);
 
-    return new Response(JSON.stringify({ success: true, data: enrichedData }), {
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      const query = `JSON specs for ${mfr} ${mpn}: ${batch.join(", ")}`;
+      
+      console.log(`[enrich-product] Batch ${i + 1}/${batches.length}, query length: ${query.length}`);
+
+      const payload = {
+        source: "google_ai_mode",
+        query: query,
+        geo_location: "United States",
+        parse: true,
+        render: "html",
+      };
+
+      try {
+        const response = await fetch("https://realtime.oxylabs.io/v1/queries", {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${authHeader}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[enrich-product] Batch ${i + 1} error: ${response.status} - ${errorText}`);
+          continue; // Skip this batch but continue with others
+        }
+
+        const data = await response.json();
+        const responseText = extractResponseText(data);
+        console.log(`[enrich-product] Batch ${i + 1} response: ${responseText.substring(0, 300)}...`);
+
+        // Parse and merge results
+        const batchResults = parseAttributeValues(responseText, batch);
+        for (const [key, value] of Object.entries(batchResults)) {
+          if (value && value !== "") {
+            allResults[key] = value;
+          }
+        }
+      } catch (batchError) {
+        console.error(`[enrich-product] Batch ${i + 1} failed:`, batchError);
+      }
+
+      // Small delay between batches to avoid rate limiting
+      if (i < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log(`[enrich-product] Final results:`, JSON.stringify(allResults, null, 2));
+
+    return new Response(JSON.stringify({ success: true, data: allResults }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
@@ -109,8 +141,7 @@ function extractResponseText(data: any): string {
     const resultsList = data.results || [];
     if (resultsList.length > 0) {
       const content = resultsList[0].content || {};
-      const responseText = content.response_text || "No response text found.";
-      return responseText;
+      return content.response_text || "No response text found.";
     }
     return "No results returned from API.";
   } catch (e) {
@@ -121,19 +152,17 @@ function extractResponseText(data: any): string {
 function parseAttributeValues(responseText: string, attributes: string[]): Record<string, string> {
   const result: Record<string, string> = {};
 
-  // Initialize all attributes with empty strings
   for (const attr of attributes) {
     result[attr] = "";
   }
 
-  // Try to parse as JSON first
+  // Try JSON parsing first
   try {
-    // Look for JSON object in the response
     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
 
-      // Check if it has the "attributes" structure
+      // Check "attributes" structure
       if (parsed.attributes && typeof parsed.attributes === "object") {
         for (const attr of attributes) {
           if (parsed.attributes[attr] !== undefined && parsed.attributes[attr] !== "") {
@@ -143,15 +172,13 @@ function parseAttributeValues(responseText: string, attributes: string[]): Recor
         return result;
       }
 
-      // Fallback: try direct key matching for each attribute
+      // Direct key matching with normalization
       for (const attr of attributes) {
-        // Try exact match first
         if (parsed[attr] !== undefined && parsed[attr] !== "") {
           result[attr] = String(parsed[attr]);
           continue;
         }
 
-        // Try case-insensitive and normalized matching
         const normalizedAttr = attr.toLowerCase().replace(/[\s_\-\.]+/g, "");
         for (const [key, value] of Object.entries(parsed)) {
           if (value === null || value === undefined || value === "") continue;
@@ -164,11 +191,10 @@ function parseAttributeValues(responseText: string, attributes: string[]): Recor
       }
     }
   } catch (e) {
-    console.log("[enrich-product] JSON parsing failed, trying text extraction:", e);
+    console.log("[enrich-product] JSON parsing failed, trying text extraction");
 
-    // Text-based extraction as fallback
+    // Text-based extraction fallback
     for (const attr of attributes) {
-      // Look for patterns like "Attribute: Value" or "Attribute - Value"
       const escapedAttr = attr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const patterns = [
         new RegExp(`"${escapedAttr}"\\s*:\\s*"([^"]+)"`, "i"),
