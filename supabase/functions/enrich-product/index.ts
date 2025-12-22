@@ -41,15 +41,14 @@ serve(async (req) => {
       });
     }
 
-    // Build the query for Oxylabs AI mode with strict JSON format
-    // Keep query short to avoid 400 character limit
-    //const query = `JSON only for ${mfr} ${mpn}: {"attributes":{${attributes.slice(0, 10).map(a => `"${a}":"val"`).join(',')}}}`;
-    const query = `Return a single JSON object for manufacturer "${mfr}" and part number "${mpn}".
-Strictly no prose, no markdown formatting, and no explanations.
-Structure: {"attributes":{${attributes
-      .slice(0, 10)
-      .map((a) => `"${a}":"val"`)
-      .join(",")}}}`;
+    // Build the query for Oxylabs AI mode with ALL attributes
+    // Create a detailed prompt for better extraction quality
+    const attributeList = attributes.join(", ");
+    const query = `Find complete product specifications for manufacturer "${mfr}" part number "${mpn}".
+Return ONLY valid JSON with this exact structure (no text before or after):
+{"attributes":{${attributes.map((a) => `"${a}":"value or empty string"`).join(",")}}}
+Required attributes: ${attributeList}
+Rules: Each attribute must be a separate key. Use exact attribute names. Return "" for unknown values. No arrays or nested objects.`;
 
     console.log(`[enrich-product] Query length: ${query.length}`);
     console.log(`[enrich-product] Query: ${query}`);
