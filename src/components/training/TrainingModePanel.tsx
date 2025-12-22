@@ -1,20 +1,22 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SelectorMapping } from '@/types/training';
+import { SelectorMapping, ManufacturerTraining } from '@/types/training';
 import { useTraining } from '@/hooks/useTraining';
 import { SelectorList } from './SelectorList';
 import { ColumnMappingDialog } from './ColumnMappingDialog';
-import { Globe, Play, Save, Trash2, ExternalLink, Plus } from 'lucide-react';
+import { Globe, Play, Save, Trash2, ExternalLink, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface TrainingModePanelProps {
   onComplete?: () => void;
+  editingTraining?: ManufacturerTraining | null;
+  onCancelEdit?: () => void;
 }
 
-export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
+export function TrainingModePanel({ onComplete, editingTraining, onCancelEdit }: TrainingModePanelProps) {
   const { saveTraining, isLoading } = useTraining();
   
   const [manufacturer, setManufacturer] = useState('');
@@ -23,6 +25,17 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
   const [selectors, setSelectors] = useState<SelectorMapping[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [pendingSelector, setPendingSelector] = useState<Partial<SelectorMapping> | null>(null);
+  const [isEditingSelector, setIsEditingSelector] = useState(false);
+
+  // Load editing training data
+  useEffect(() => {
+    if (editingTraining) {
+      setManufacturer(editingTraining.manufacturer);
+      setTestUrl(editingTraining.test_url);
+      setSelectors(editingTraining.selectors);
+      setIsPageLoaded(true);
+    }
+  }, [editingTraining]);
 
   const handleLoadPage = useCallback(() => {
     if (!testUrl) {
@@ -44,15 +57,28 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
       cssSelector: '',
       type: 'text',
     });
+    setIsEditingSelector(false);
+    setIsDialogOpen(true);
+  }, []);
+
+  const handleEditSelector = useCallback((selector: SelectorMapping) => {
+    setPendingSelector(selector);
+    setIsEditingSelector(true);
     setIsDialogOpen(true);
   }, []);
 
   const handleSaveSelector = useCallback((mapping: SelectorMapping) => {
-    setSelectors(prev => [...prev, mapping]);
+    if (isEditingSelector) {
+      setSelectors(prev => prev.map(s => s.id === mapping.id ? mapping : s));
+      toast.success(`Selector for "${mapping.columnName}" updated`);
+    } else {
+      setSelectors(prev => [...prev, mapping]);
+      toast.success(`Selector for "${mapping.columnName}" added`);
+    }
     setPendingSelector(null);
+    setIsEditingSelector(false);
     setIsDialogOpen(false);
-    toast.success(`Selector for "${mapping.columnName}" added`);
-  }, []);
+  }, [isEditingSelector]);
 
   const handleRemoveSelector = useCallback((id: string) => {
     setSelectors(prev => prev.filter(s => s.id !== id));
@@ -80,19 +106,33 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
     setTestUrl('');
     setSelectors([]);
     setIsPageLoaded(false);
-  }, []);
+    onCancelEdit?.();
+  }, [onCancelEdit]);
 
   return (
     <div className="space-y-6">
       <Card className="border-primary/20">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Globe className="w-5 h-5 text-primary" />
-            Training Mode
-          </CardTitle>
-          <CardDescription>
-            Train the system to extract assets from manufacturer product pages using CSS selectors or XPath
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Globe className="w-5 h-5 text-primary" />
+                {editingTraining ? 'Edit Training' : 'Training Mode'}
+              </CardTitle>
+              <CardDescription>
+                {editingTraining 
+                  ? `Editing selectors for ${editingTraining.manufacturer}`
+                  : 'Train the system to extract assets from manufacturer product pages using CSS selectors or XPath'
+                }
+              </CardDescription>
+            </div>
+            {editingTraining && (
+              <Button variant="ghost" size="sm" onClick={handleClear}>
+                <X className="w-4 h-4 mr-1" />
+                Cancel
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -102,7 +142,7 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
               value={manufacturer}
               onChange={(e) => setManufacturer(e.target.value)}
               placeholder="e.g., Texas Instruments, Analog Devices"
-              disabled={isPageLoaded}
+              disabled={isPageLoaded || !!editingTraining}
             />
           </div>
 
@@ -114,10 +154,10 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
                 value={testUrl}
                 onChange={(e) => setTestUrl(e.target.value)}
                 placeholder="https://manufacturer.com/product/example"
-                disabled={isPageLoaded}
+                disabled={isPageLoaded && !editingTraining}
                 className="flex-1"
               />
-              {!isPageLoaded && (
+              {!isPageLoaded && !editingTraining && (
                 <Button onClick={handleLoadPage} disabled={!testUrl || !manufacturer}>
                   <Play className="w-4 h-4 mr-2" />
                   Start
@@ -131,7 +171,9 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
               <div className="flex items-center justify-between p-4 rounded-lg bg-accent/30 border border-accent">
                 <div className="flex items-center gap-2">
                   <ExternalLink className="w-4 h-4 text-accent-foreground" />
-                  <span className="text-sm font-medium">Training: {manufacturer}</span>
+                  <span className="text-sm font-medium">
+                    {editingTraining ? 'Editing' : 'Training'}: {manufacturer}
+                  </span>
                 </div>
                 <Button
                   variant="outline"
@@ -166,6 +208,7 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
         <SelectorList
           selectors={selectors}
           onRemove={handleRemoveSelector}
+          onEdit={handleEditSelector}
         />
       )}
 
@@ -173,23 +216,27 @@ export function TrainingModePanel({ onComplete }: TrainingModePanelProps) {
         <div className="flex justify-between">
           <Button variant="outline" onClick={handleClear}>
             <Trash2 className="w-4 h-4 mr-2" />
-            Clear All
+            {editingTraining ? 'Cancel' : 'Clear All'}
           </Button>
           <Button
             onClick={handleSaveTraining}
             disabled={selectors.length === 0 || isLoading}
           >
             <Save className="w-4 h-4 mr-2" />
-            {isLoading ? 'Saving...' : 'Save Training'}
+            {isLoading ? 'Saving...' : editingTraining ? 'Update Training' : 'Save Training'}
           </Button>
         </div>
       )}
 
       <ColumnMappingDialog
         isOpen={isDialogOpen}
-        onClose={() => setIsDialogOpen(false)}
+        onClose={() => {
+          setIsDialogOpen(false);
+          setIsEditingSelector(false);
+        }}
         pendingSelector={pendingSelector}
         onSave={handleSaveSelector}
+        isEditing={isEditingSelector}
       />
     </div>
   );

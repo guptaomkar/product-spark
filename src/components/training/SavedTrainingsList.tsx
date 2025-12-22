@@ -4,14 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useTraining } from '@/hooks/useTraining';
 import { ManufacturerTraining } from '@/types/training';
-import { Trash2, ExternalLink, Settings, Loader2 } from 'lucide-react';
+import { Trash2, ExternalLink, Settings, Loader2, Edit } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface SavedTrainingsListProps {
   onSelect?: (training: ManufacturerTraining) => void;
+  onEdit?: (training: ManufacturerTraining) => void;
 }
 
-export function SavedTrainingsList({ onSelect }: SavedTrainingsListProps) {
+export function SavedTrainingsList({ onSelect, onEdit }: SavedTrainingsListProps) {
   const { trainings, isLoading, fetchTrainings, deleteTraining } = useTraining();
 
   useEffect(() => {
@@ -79,6 +80,19 @@ export function SavedTrainingsList({ onSelect }: SavedTrainingsListProps) {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {onEdit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(training);
+                    }}
+                    className="text-muted-foreground hover:text-primary"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
