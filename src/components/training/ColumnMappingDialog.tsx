@@ -25,6 +25,7 @@ interface ColumnMappingDialogProps {
   onClose: () => void;
   pendingSelector: Partial<SelectorMapping> | null;
   onSave: (mapping: SelectorMapping) => void;
+  isEditing?: boolean;
 }
 
 export function ColumnMappingDialog({
@@ -32,6 +33,7 @@ export function ColumnMappingDialog({
   onClose,
   pendingSelector,
   onSave,
+  isEditing = false,
 }: ColumnMappingDialogProps) {
   const [columnName, setColumnName] = useState('');
   const [selectorType, setSelectorType] = useState<SelectorMapping['type']>('text');
@@ -43,7 +45,7 @@ export function ColumnMappingDialog({
       setCssSelector(pendingSelector.cssSelector || '');
       setXpath(pendingSelector.xpath || '');
       setSelectorType(pendingSelector.type || 'text');
-      setColumnName('');
+      setColumnName(pendingSelector.columnName || '');
     }
   }, [pendingSelector]);
 
@@ -77,9 +79,9 @@ export function ColumnMappingDialog({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Map Element to Column</DialogTitle>
+          <DialogTitle>{isEditing ? 'Edit Selector Mapping' : 'Map Element to Column'}</DialogTitle>
           <DialogDescription>
-            Define how this element should be extracted and stored
+            {isEditing ? 'Update the selector configuration' : 'Define how this element should be extracted and stored'}
           </DialogDescription>
         </DialogHeader>
 
@@ -143,7 +145,7 @@ export function ColumnMappingDialog({
             Cancel
           </Button>
           <Button onClick={handleSave}>
-            Save Mapping
+            {isEditing ? 'Update Mapping' : 'Save Mapping'}
           </Button>
         </DialogFooter>
       </DialogContent>

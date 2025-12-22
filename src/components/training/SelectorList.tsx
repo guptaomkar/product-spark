@@ -2,11 +2,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { SelectorMapping } from '@/types/training';
-import { Trash2, Image, Link, FileText, File } from 'lucide-react';
+import { Trash2, Image, Link, FileText, File, Edit } from 'lucide-react';
 
 interface SelectorListProps {
   selectors: SelectorMapping[];
   onRemove: (id: string) => void;
+  onEdit?: (selector: SelectorMapping) => void;
 }
 
 const typeIcons = {
@@ -23,7 +24,7 @@ const typeColors = {
   datasheet: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
 };
 
-export function SelectorList({ selectors, onRemove }: SelectorListProps) {
+export function SelectorList({ selectors, onRemove, onEdit }: SelectorListProps) {
   return (
     <Card>
       <CardHeader>
@@ -61,14 +62,26 @@ export function SelectorList({ selectors, onRemove }: SelectorListProps) {
                     )}
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onRemove(selector.id)}
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  {onEdit && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(selector)}
+                      className="text-muted-foreground hover:text-primary"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onRemove(selector.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             );
           })}

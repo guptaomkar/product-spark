@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Header } from '@/components/layout/Header';
 import { FileUpload } from '@/components/upload/FileUpload';
 import { ProductTable } from '@/components/enrichment/ProductTable';
@@ -9,6 +9,7 @@ import { TrainingModePanel } from '@/components/training/TrainingModePanel';
 import { SavedTrainingsList } from '@/components/training/SavedTrainingsList';
 import { BulkScrapePanel } from '@/components/training/BulkScrapePanel';
 import { useTraining } from '@/hooks/useTraining';
+import { ManufacturerTraining } from '@/types/training';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
@@ -38,8 +39,22 @@ const Index = () => {
 
   const { trainings, fetchTrainings } = useTraining();
   const [activeTab, setActiveTab] = useState('enrichment');
+  const [editingTraining, setEditingTraining] = useState<ManufacturerTraining | null>(null);
 
   useEffect(() => {
+    fetchTrainings();
+  }, [fetchTrainings]);
+
+  const handleEditTraining = useCallback((training: ManufacturerTraining) => {
+    setEditingTraining(training);
+  }, []);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingTraining(null);
+  }, []);
+
+  const handleTrainingComplete = useCallback(() => {
+    setEditingTraining(null);
     fetchTrainings();
   }, [fetchTrainings]);
 
@@ -197,10 +212,14 @@ const Index = () => {
               </div>
 
               {/* Training Panel */}
-              <TrainingModePanel onComplete={fetchTrainings} />
+              <TrainingModePanel 
+                onComplete={handleTrainingComplete} 
+                editingTraining={editingTraining}
+                onCancelEdit={handleCancelEdit}
+              />
 
               {/* Saved Trainings */}
-              <SavedTrainingsList />
+              <SavedTrainingsList onEdit={handleEditTraining} />
             </div>
           </TabsContent>
 
