@@ -73,9 +73,10 @@ export function useEnrichment() {
         const categoryAttributes = getAttributesForCategory(product.category, attributes);
         const enrichedData = await enrichProduct(product, categoryAttributes);
         
-        // Check if we got all values or just some
+        // Check fill rate - 70% or more = success
         const filledValues = Object.values(enrichedData).filter(v => v !== '').length;
-        const status = filledValues === categoryAttributes.length ? 'success' : 
+        const fillRate = categoryAttributes.length > 0 ? filledValues / categoryAttributes.length : 0;
+        const status = fillRate >= 0.7 ? 'success' : 
                        filledValues > 0 ? 'partial' : 'failed';
         
         setProducts(prev => prev.map((p, idx) => 
