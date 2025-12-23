@@ -248,12 +248,11 @@ export function BulkScrapePanel({ trainings }: BulkScrapePanelProps) {
               )}
             </div>
 
-            {/* Asset Download Panel */}
-            {results.length > 0 && !isProcessing && (
-              <AssetDownloadPanel results={results} />
-            )}
           </>
         )}
+
+        {/* Asset Download (always visible) */}
+        <AssetDownloadPanel results={results} />
 
         {trainings.length === 0 && (
           <p className="text-center text-muted-foreground py-4">
