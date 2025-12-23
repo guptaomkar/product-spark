@@ -233,35 +233,53 @@ export function AssetDownloadPanel() {
       .substring(0, 100);
   };
 
-  const downloadAsset = async (url: string): Promise<{ blob: Blob; contentType: string } | null> => {
+  type DownloadAssetSuccess = { blob: Blob; contentType: string; size?: number };
+  type DownloadAssetFailure = { error: string };
+  type DownloadAssetResponse = DownloadAssetSuccess | DownloadAssetFailure;
+
+  const downloadAsset = async (url: string): Promise<DownloadAssetResponse> => {
     try {
-      // Use edge function to avoid CORS issues
+      // Use backend function to avoid CORS issues
       const { data, error } = await supabase.functions.invoke('download-asset', {
         body: { url },
       });
 
       if (error) {
-        console.error(`Edge function error for ${url}:`, error);
-        return null;
+        console.error(`Downloader function error for ${url}:`, error);
+        return { error: error.message || 'Downloader failed' };
       }
 
       if (data?.error) {
         console.error(`Download error for ${url}:`, data.error);
-        return null;
+        return { error: String(data.error) };
+      }
+
+      if (!data?.data || !data?.contentType) {
+        return { error: 'Invalid response from downloader' };
       }
 
       // Convert base64 back to blob
-      const binaryString = atob(data.data);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      let bytes: Uint8Array;
+      try {
+        const binaryString = atob(data.data);
+        bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+      } catch (e) {
+        console.error('Failed to decode base64 response:', e);
+        return { error: 'Failed to decode downloaded file' };
       }
-      const blob = new Blob([bytes], { type: data.contentType });
 
-      return { blob, contentType: data.contentType };
+      if (bytes.length === 0) {
+        return { error: 'Downloaded file is empty' };
+      }
+
+      const blob = new Blob([bytes.buffer as ArrayBuffer], { type: data.contentType });
+      return { blob, contentType: data.contentType, size: data.size };
     } catch (error) {
       console.error(`Failed to download ${url}:`, error);
-      return null;
+      return { error: error instanceof Error ? error.message : 'Failed to download' };
     }
   };
 
@@ -293,32 +311,50 @@ export function AssetDownloadPanel() {
 
       const result = await downloadAsset(item.url);
 
-      if (result) {
-        const ext = getFileExtension(item.url, result.contentType);
-        
-        // Handle duplicate identifiers by adding suffix
-        let filename = `${sanitizedIdentifier}.${ext}`;
-        const count = usedFilenames.get(sanitizedIdentifier) || 0;
-        if (count > 0) {
-          filename = `${sanitizedIdentifier}_${count + 1}.${ext}`;
-        }
-        usedFilenames.set(sanitizedIdentifier, count + 1);
-        
-        // Add file directly to root of ZIP (no folders)
-        zip.file(filename, result.blob);
-        
-        downloadedResults.push({
-          identifier: item.identifier,
-          url: item.url,
-          success: true,
-        });
-      } else {
+      if ('error' in result) {
         downloadedResults.push({
           identifier: item.identifier,
           url: item.url,
           success: false,
-          error: 'Failed to download (CORS or network error)',
+          error: result.error,
         });
+      } else {
+        const ct = String(result.contentType || '').toLowerCase();
+        const isHtml = ct.startsWith('text/html');
+        const isOctet = ct.includes('application/octet-stream');
+        const isImage = ct.startsWith('image/');
+        const isPdf = ct.includes('pdf');
+
+        const typeMismatch =
+          assetType === 'images' ? !(isImage || isOctet) : !(isPdf || isOctet);
+
+        if (isHtml || typeMismatch) {
+          downloadedResults.push({
+            identifier: item.identifier,
+            url: item.url,
+            success: false,
+            error: `Unexpected file type: ${result.contentType}`,
+          });
+        } else {
+          const ext = getFileExtension(item.url, result.contentType);
+
+          // Handle duplicate identifiers by adding suffix
+          let filename = `${sanitizedIdentifier}.${ext}`;
+          const count = usedFilenames.get(sanitizedIdentifier) || 0;
+          if (count > 0) {
+            filename = `${sanitizedIdentifier}_${count + 1}.${ext}`;
+          }
+          usedFilenames.set(sanitizedIdentifier, count + 1);
+
+          // Add file directly to root of ZIP (no folders)
+          zip.file(filename, result.blob);
+
+          downloadedResults.push({
+            identifier: item.identifier,
+            url: item.url,
+            success: true,
+          });
+        }
       }
 
       setDownloadResults([...downloadedResults]);
