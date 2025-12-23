@@ -242,8 +242,43 @@ const Index = () => {
                 </p>
               </div>
 
-              {/* Bulk Scrape Panel */}
+              {/* Bulk Scrape Panel with Asset Download */}
               <BulkScrapePanel trainings={trainings} />
+
+              {/* Standalone Asset Download Info Card */}
+              <div className="p-6 rounded-xl bg-card border border-border">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Download className="w-6 h-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground mb-2">Asset Download Feature</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      After running a bulk scrape, the <strong>Asset Download</strong> panel will appear below the results. 
+                      It automatically detects image and PDF URLs from your extracted data, downloads them, 
+                      renames files using the MPN column, and packages everything into a ZIP file organized by product.
+                    </p>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Auto-detects downloadable URLs (images, PDFs)
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Renames files using MPN for easy identification
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Creates organized ZIP with folders per product
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary"></span>
+                        Handles broken/missing URLs gracefully
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
 
               {/* Saved Trainings Reference */}
               <SavedTrainingsList />
