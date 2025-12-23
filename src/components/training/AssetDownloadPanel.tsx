@@ -45,6 +45,8 @@ type AssetType = 'images' | 'pdfs';
 
 export function AssetDownloadPanel() {
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [isLoadingFile, setIsLoadingFile] = useState(false);
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [downloadResults, setDownloadResults] = useState<DownloadResult[]>([]);
   const [assetType, setAssetType] = useState<AssetType>('images');
@@ -53,15 +55,18 @@ export function AssetDownloadPanel() {
   const [identifierColumn, setIdentifierColumn] = useState<string>('');
   const [urlColumn, setUrlColumn] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
+  const [rawData, setRawData] = useState<Record<string, unknown>[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setIsLoadingFile(true);
     setFileName(file.name);
     setParsedData([]);
     setDownloadResults([]);
+    setRawData([]);
     
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -70,15 +75,27 @@ export function AssetDownloadPanel() {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
-
-        if (jsonData.length < 2) {
+        
+        // Get headers
+        const headerData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as string[][];
+        if (headerData.length < 2) {
           toast.error('File must have at least a header row and one data row');
+          setIsLoadingFile(false);
           return;
         }
-
-        const headers = jsonData[0].map(h => String(h || '').trim());
+        
+        const headers = headerData[0].map(h => String(h || '').trim()).filter(h => h !== '');
+        if (headers.length === 0) {
+          toast.error('No valid columns found in the file');
+          setIsLoadingFile(false);
+          return;
+        }
+        
         setColumns(headers);
+        
+        // Store raw data for later parsing
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
+        setRawData(jsonData);
         
         // Auto-select columns if we can find likely matches
         const mpnLike = headers.find(h => 
@@ -91,54 +108,86 @@ export function AssetDownloadPanel() {
         if (mpnLike) setIdentifierColumn(mpnLike);
         if (urlLike) setUrlColumn(urlLike);
 
-        toast.success(`Loaded ${jsonData.length - 1} rows from ${file.name}`);
+        toast.success(`Loaded ${jsonData.length} rows from ${file.name}`);
+        setIsLoadingFile(false);
       } catch (error) {
         console.error('Error parsing file:', error);
-        toast.error('Failed to parse Excel file');
+        toast.error('Failed to parse Excel file. Please check the file format.');
+        setIsLoadingFile(false);
+        clearFile();
       }
     };
+    
+    reader.onerror = () => {
+      toast.error('Failed to read the file');
+      setIsLoadingFile(false);
+      clearFile();
+    };
+    
     reader.readAsArrayBuffer(file);
   }, []);
 
   const parseDataFromFile = useCallback(() => {
-    if (!fileName || !identifierColumn || !urlColumn) return;
+    if (!identifierColumn || !urlColumn) {
+      toast.error('Please select both identifier and URL columns');
+      return;
+    }
 
-    const file = fileInputRef.current?.files?.[0];
-    if (!file) return;
+    if (rawData.length === 0) {
+      toast.error('No data available to parse. Please upload a file first.');
+      return;
+    }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
+    setIsParsing(true);
+    
+    // Use setTimeout to allow UI to update before parsing
+    setTimeout(() => {
       try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
-
         const parsed: ParsedRow[] = [];
-        jsonData.forEach((row, index) => {
+        let invalidUrlCount = 0;
+        let emptyRowCount = 0;
+
+        rawData.forEach((row, index) => {
           const identifier = String(row[identifierColumn] || '').trim();
           const url = String(row[urlColumn] || '').trim();
           
-          if (identifier && url && (url.startsWith('http://') || url.startsWith('https://'))) {
+          if (!identifier || !url) {
+            emptyRowCount++;
+            return;
+          }
+          
+          if (url.startsWith('http://') || url.startsWith('https://')) {
             parsed.push({ identifier, url, rowIndex: index + 2 });
+          } else {
+            invalidUrlCount++;
           }
         });
 
         setParsedData(parsed);
         
         if (parsed.length === 0) {
-          toast.error('No valid URLs found in the selected column');
+          if (invalidUrlCount > 0) {
+            toast.error(`No valid URLs found. ${invalidUrlCount} URLs don't start with http:// or https://`);
+          } else if (emptyRowCount > 0) {
+            toast.error('No valid data found. Rows are missing identifier or URL values.');
+          } else {
+            toast.error('No valid URLs found in the selected column');
+          }
         } else {
-          toast.success(`Found ${parsed.length} valid URLs to download`);
+          let message = `Found ${parsed.length} valid URLs to download`;
+          if (invalidUrlCount > 0) {
+            message += ` (${invalidUrlCount} invalid URLs skipped)`;
+          }
+          toast.success(message);
         }
       } catch (error) {
         console.error('Error parsing file:', error);
         toast.error('Failed to parse file data');
+      } finally {
+        setIsParsing(false);
       }
-    };
-    reader.readAsArrayBuffer(file);
-  }, [fileName, identifierColumn, urlColumn]);
+    }, 100);
+  }, [rawData, identifierColumn, urlColumn]);
 
   const clearFile = useCallback(() => {
     setFileName('');
@@ -147,6 +196,7 @@ export function AssetDownloadPanel() {
     setIdentifierColumn('');
     setUrlColumn('');
     setDownloadResults([]);
+    setRawData([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -329,7 +379,14 @@ export function AssetDownloadPanel() {
         {/* File Upload */}
         <div className="space-y-3">
           <Label className="text-sm font-medium">Excel File</Label>
-          {!fileName ? (
+          {isLoadingFile ? (
+            <div className="border-2 border-dashed border-primary/50 rounded-lg p-6 text-center">
+              <Loader2 className="w-8 h-8 text-primary mx-auto mb-2 animate-spin" />
+              <p className="text-sm text-muted-foreground">
+                Loading file...
+              </p>
+            </div>
+          ) : !fileName ? (
             <div 
               className="border-2 border-dashed border-border rounded-lg p-6 text-center hover:border-primary/50 transition-colors cursor-pointer"
               onClick={() => fileInputRef.current?.click()}
@@ -354,8 +411,13 @@ export function AssetDownloadPanel() {
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-green-400" />
                 <span className="text-sm font-medium">{fileName}</span>
+                {columns.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    ({rawData.length} rows, {columns.length} columns)
+                  </span>
+                )}
               </div>
-              <Button variant="ghost" size="sm" onClick={clearFile}>
+              <Button variant="ghost" size="sm" onClick={clearFile} disabled={isParsing || isDownloading}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -396,9 +458,23 @@ export function AssetDownloadPanel() {
 
         {/* Parse Button */}
         {columns.length > 0 && identifierColumn && urlColumn && parsedData.length === 0 && (
-          <Button onClick={parseDataFromFile} variant="outline" className="w-full">
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            Parse URLs from File
+          <Button 
+            onClick={parseDataFromFile} 
+            variant="outline" 
+            className="w-full"
+            disabled={isParsing}
+          >
+            {isParsing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Parsing URLs...
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="w-4 h-4 mr-2" />
+                Parse URLs from File
+              </>
+            )}
           </Button>
         )}
 
