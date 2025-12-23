@@ -267,21 +267,21 @@ const Index = () => {
                 </div>
                 
                 <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-                  Download <span className="text-gradient">Assets by MPN</span>
+                  Bulk <span className="text-gradient">Asset Download</span>
                 </h1>
                 <p className="text-muted-foreground max-w-2xl mx-auto">
-                  Download images and PDFs from extracted URLs. Files are automatically renamed 
-                  using the MPN column and packaged into an organized ZIP file.
+                  Upload an Excel file containing image or PDF URLs. Select the asset type, 
+                  map your columns, and download all files as an organized ZIP.
                 </p>
               </div>
 
               {/* How it works */}
               <div className="grid md:grid-cols-4 gap-4 mb-8">
                 {[
-                  { step: '1', title: 'Run Bulk Scrape', desc: 'Extract URLs from product pages' },
-                  { step: '2', title: 'View Results', desc: 'Check extracted image/PDF URLs' },
-                  { step: '3', title: 'Download Assets', desc: 'Click download to fetch all files' },
-                  { step: '4', title: 'Get ZIP', desc: 'Files renamed by MPN in folders' },
+                  { step: '1', title: 'Choose Type', desc: 'Select Images or PDFs' },
+                  { step: '2', title: 'Upload File', desc: 'Excel with URLs & identifiers' },
+                  { step: '3', title: 'Map Columns', desc: 'Select MPN & URL columns' },
+                  { step: '4', title: 'Download ZIP', desc: 'Files renamed by identifier' },
                 ].map((item, i) => (
                   <div key={i} className="p-4 rounded-xl bg-card border border-border text-center">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
@@ -294,49 +294,7 @@ const Index = () => {
               </div>
 
               {/* Asset Download Panel */}
-              <AssetDownloadPanel results={[]} />
-
-              {/* Features */}
-              <div className="p-6 rounded-xl bg-card border border-border">
-                <h3 className="font-semibold text-foreground mb-4">Features</h3>
-                <ul className="grid md:grid-cols-2 gap-3 text-sm text-muted-foreground">
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Auto-detects image URLs (JPG, PNG, WebP, etc.)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Auto-detects PDF/datasheet URLs
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Renames files using MPN column
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Organizes files in folders per product
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Handles broken/missing URLs gracefully
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                    Downloads everything as a single ZIP
-                  </li>
-                </ul>
-              </div>
-
-              {/* CTA to Bulk Scrape */}
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-3">
-                  Need to extract URLs first? Run a bulk scrape.
-                </p>
-                <Button variant="outline" onClick={() => setActiveTab('bulk')}>
-                  <Database className="w-4 h-4" />
-                  Go to Bulk Scrape
-                </Button>
-              </div>
+              <AssetDownloadPanel />
             </div>
           </TabsContent>
         </Tabs>
