@@ -12,11 +12,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ManufacturerTraining, BulkScrapeResult } from '@/types/training';
-import { useTraining } from '@/hooks/useTraining';
 import { supabase } from '@/integrations/supabase/client';
 import { Download, Play, Loader2, CheckCircle, XCircle, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { AssetDownloadPanel } from './AssetDownloadPanel';
 
 interface BulkScrapePanelProps {
   trainings: ManufacturerTraining[];
@@ -247,6 +247,11 @@ export function BulkScrapePanel({ trainings }: BulkScrapePanelProps) {
                 </Button>
               )}
             </div>
+
+            {/* Asset Download Panel */}
+            {results.length > 0 && !isProcessing && (
+              <AssetDownloadPanel results={results} />
+            )}
           </>
         )}
 
