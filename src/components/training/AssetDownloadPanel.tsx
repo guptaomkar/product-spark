@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -234,19 +235,30 @@ export function AssetDownloadPanel() {
 
   const downloadAsset = async (url: string): Promise<{ blob: Blob; contentType: string } | null> => {
     try {
-      const response = await fetch(url, {
-        mode: 'cors',
-        credentials: 'omit',
+      // Use edge function to avoid CORS issues
+      const { data, error } = await supabase.functions.invoke('download-asset', {
+        body: { url },
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      if (error) {
+        console.error(`Edge function error for ${url}:`, error);
+        return null;
       }
 
-      const blob = await response.blob();
-      const contentType = response.headers.get('content-type') || '';
-      
-      return { blob, contentType };
+      if (data?.error) {
+        console.error(`Download error for ${url}:`, data.error);
+        return null;
+      }
+
+      // Convert base64 back to blob
+      const binaryString = atob(data.data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: data.contentType });
+
+      return { blob, contentType: data.contentType };
     } catch (error) {
       console.error(`Failed to download ${url}:`, error);
       return null;
@@ -266,56 +278,50 @@ export function AssetDownloadPanel() {
     const downloadedResults: DownloadResult[] = [];
     const totalAssets = parsedData.length;
 
-    // Group by identifier
-    const assetsByIdentifier = new Map<string, ParsedRow[]>();
-    parsedData.forEach(item => {
-      const existing = assetsByIdentifier.get(item.identifier) || [];
-      existing.push(item);
-      assetsByIdentifier.set(item.identifier, existing);
-    });
+    // Track used filenames to handle duplicates
+    const usedFilenames = new Map<string, number>();
 
-    let processedCount = 0;
-
-    for (const [identifier, items] of assetsByIdentifier) {
-      const sanitizedIdentifier = sanitizeFilename(identifier);
-      const folder = zip.folder(sanitizedIdentifier);
+    for (let i = 0; i < parsedData.length; i++) {
+      const item = parsedData[i];
+      const sanitizedIdentifier = sanitizeFilename(item.identifier);
       
-      if (!folder) continue;
+      setProgress({
+        current: i + 1,
+        total: totalAssets,
+        currentFile: item.identifier,
+      });
 
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        setProgress({
-          current: processedCount + 1,
-          total: totalAssets,
-          currentFile: `${identifier} (${i + 1}/${items.length})`,
-        });
+      const result = await downloadAsset(item.url);
 
-        const result = await downloadAsset(item.url);
-
-        if (result) {
-          const ext = getFileExtension(item.url, result.contentType);
-          const filename = items.length > 1 
-            ? `${sanitizedIdentifier}_${i + 1}.${ext}`
-            : `${sanitizedIdentifier}.${ext}`;
-          folder.file(filename, result.blob);
-          
-          downloadedResults.push({
-            identifier,
-            url: item.url,
-            success: true,
-          });
-        } else {
-          downloadedResults.push({
-            identifier,
-            url: item.url,
-            success: false,
-            error: 'Failed to download',
-          });
+      if (result) {
+        const ext = getFileExtension(item.url, result.contentType);
+        
+        // Handle duplicate identifiers by adding suffix
+        let filename = `${sanitizedIdentifier}.${ext}`;
+        const count = usedFilenames.get(sanitizedIdentifier) || 0;
+        if (count > 0) {
+          filename = `${sanitizedIdentifier}_${count + 1}.${ext}`;
         }
-
-        processedCount++;
-        setDownloadResults([...downloadedResults]);
+        usedFilenames.set(sanitizedIdentifier, count + 1);
+        
+        // Add file directly to root of ZIP (no folders)
+        zip.file(filename, result.blob);
+        
+        downloadedResults.push({
+          identifier: item.identifier,
+          url: item.url,
+          success: true,
+        });
+      } else {
+        downloadedResults.push({
+          identifier: item.identifier,
+          url: item.url,
+          success: false,
+          error: 'Failed to download (CORS or network error)',
+        });
       }
+
+      setDownloadResults([...downloadedResults]);
     }
 
     // Generate and save ZIP
