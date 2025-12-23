@@ -4,14 +4,13 @@ import { saveAs } from 'file-saver';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { 
-  Download, 
-  FileArchive, 
-  Loader2, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Download,
+  FileArchive,
+  Loader2,
+  CheckCircle,
+  XCircle,
   ImageIcon,
-  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BulkScrapeResult } from '@/types/training';
@@ -208,10 +207,6 @@ export function AssetDownloadPanel({ results, mpnColumn = 'MPN' }: AssetDownload
   const successCount = downloadResults.filter(r => r.success).length;
   const failedCount = downloadResults.filter(r => !r.success).length;
 
-  if (results.length === 0) {
-    return null;
-  }
-
   return (
     <Card className="mt-4">
       <CardHeader className="pb-3">
@@ -220,7 +215,9 @@ export function AssetDownloadPanel({ results, mpnColumn = 'MPN' }: AssetDownload
           Asset Download
         </CardTitle>
         <CardDescription>
-          Download extracted images and PDFs, renamed by MPN
+          {results.length === 0
+            ? 'Run a bulk scrape to generate downloadable image/PDF URLs, then download them as a ZIP renamed by MPN.'
+            : 'Download extracted images and PDFs, renamed by MPN'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
