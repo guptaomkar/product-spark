@@ -12,6 +12,7 @@ import { useTraining } from '@/hooks/useTraining';
 import { ManufacturerTraining } from '@/types/training';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { AssetDownloadPanel } from '@/components/training/AssetDownloadPanel';
 import { 
   Play, 
   Download, 
@@ -21,7 +22,8 @@ import {
   Sparkles,
   ArrowRight,
   GraduationCap,
-  Database
+  Database,
+  FileArchive
 } from 'lucide-react';
 
 const Index = () => {
@@ -68,7 +70,7 @@ const Index = () => {
       <main className="container mx-auto px-6 py-8">
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-3 mx-auto">
+          <TabsList className="grid w-full max-w-xl grid-cols-4 mx-auto">
             <TabsTrigger value="enrichment" className="flex items-center gap-2">
               <Sparkles className="w-4 h-4" />
               AI Enrichment
@@ -80,6 +82,10 @@ const Index = () => {
             <TabsTrigger value="bulk" className="flex items-center gap-2">
               <Database className="w-4 h-4" />
               Bulk Scrape
+            </TabsTrigger>
+            <TabsTrigger value="download" className="flex items-center gap-2">
+              <FileArchive className="w-4 h-4" />
+              Asset Download
             </TabsTrigger>
           </TabsList>
 
@@ -118,19 +124,6 @@ const Index = () => {
                       <p className="text-sm text-muted-foreground">{feature.desc}</p>
                     </div>
                   ))}
-                </div>
-
-                {/* Downloads CTA */}
-                <div className="flex items-center justify-center mb-10 animate-fade-in" style={{ animationDelay: '0.15s' }}>
-                  <div className="flex flex-col sm:flex-row items-center gap-3 rounded-xl border border-border bg-card px-5 py-4">
-                    <p className="text-sm text-muted-foreground">
-                      Need to download images/PDFs by MPN? Use <span className="text-foreground font-medium">Bulk Scrape</span>.
-                    </p>
-                    <Button variant="outline" onClick={() => setActiveTab('bulk')}>
-                      <Download className="w-4 h-4" />
-                      Open Bulk Scrape
-                    </Button>
-                  </div>
                 </div>
 
                 {/* File Upload */}
@@ -255,46 +248,95 @@ const Index = () => {
                 </p>
               </div>
 
-              {/* Standalone Asset Download Info Card */}
-              <div className="p-6 rounded-xl bg-card border border-border">
-                <div className="flex items-start gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Download className="w-6 h-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground mb-2">Asset Download Feature</h3>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Run a bulk scrape and the <strong>Asset Download</strong> panel will appear under the results. It
-                      detects image/PDF URLs from extracted data, renames files using the MPN column, and packages
-                      everything into a ZIP organized by product.
-                    </p>
-                    <ul className="text-sm text-muted-foreground space-y-1">
-                      <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        Auto-detects downloadable URLs (images, PDFs)
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        Renames files using MPN for easy identification
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        Creates an organized ZIP with folders per product
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        Handles broken/missing URLs gracefully
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bulk Scrape Panel with Asset Download */}
+              {/* Bulk Scrape Panel */}
               <BulkScrapePanel trainings={trainings} />
 
               {/* Saved Trainings Reference */}
               <SavedTrainingsList />
+            </div>
+          </TabsContent>
+
+          {/* Asset Download Tab */}
+          <TabsContent value="download">
+            <div className="max-w-4xl mx-auto space-y-8">
+              {/* Hero Section */}
+              <div className="text-center mb-8 animate-fade-in">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+                  <FileArchive className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium text-primary">Asset Download</span>
+                </div>
+                
+                <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                  Download <span className="text-gradient">Assets by MPN</span>
+                </h1>
+                <p className="text-muted-foreground max-w-2xl mx-auto">
+                  Download images and PDFs from extracted URLs. Files are automatically renamed 
+                  using the MPN column and packaged into an organized ZIP file.
+                </p>
+              </div>
+
+              {/* How it works */}
+              <div className="grid md:grid-cols-4 gap-4 mb-8">
+                {[
+                  { step: '1', title: 'Run Bulk Scrape', desc: 'Extract URLs from product pages' },
+                  { step: '2', title: 'View Results', desc: 'Check extracted image/PDF URLs' },
+                  { step: '3', title: 'Download Assets', desc: 'Click download to fetch all files' },
+                  { step: '4', title: 'Get ZIP', desc: 'Files renamed by MPN in folders' },
+                ].map((item, i) => (
+                  <div key={i} className="p-4 rounded-xl bg-card border border-border text-center">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                      <span className="text-sm font-bold text-primary">{item.step}</span>
+                    </div>
+                    <h3 className="font-medium text-foreground mb-1">{item.title}</h3>
+                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Asset Download Panel */}
+              <AssetDownloadPanel results={[]} />
+
+              {/* Features */}
+              <div className="p-6 rounded-xl bg-card border border-border">
+                <h3 className="font-semibold text-foreground mb-4">Features</h3>
+                <ul className="grid md:grid-cols-2 gap-3 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Auto-detects image URLs (JPG, PNG, WebP, etc.)
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Auto-detects PDF/datasheet URLs
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Renames files using MPN column
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Organizes files in folders per product
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Handles broken/missing URLs gracefully
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                    Downloads everything as a single ZIP
+                  </li>
+                </ul>
+              </div>
+
+              {/* CTA to Bulk Scrape */}
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-3">
+                  Need to extract URLs first? Run a bulk scrape.
+                </p>
+                <Button variant="outline" onClick={() => setActiveTab('bulk')}>
+                  <Database className="w-4 h-4" />
+                  Go to Bulk Scrape
+                </Button>
+              </div>
             </div>
           </TabsContent>
         </Tabs>

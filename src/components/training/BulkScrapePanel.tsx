@@ -16,7 +16,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Download, Play, Loader2, CheckCircle, XCircle, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
-import { AssetDownloadPanel } from './AssetDownloadPanel';
 
 interface BulkScrapePanelProps {
   trainings: ManufacturerTraining[];
@@ -250,9 +249,6 @@ export function BulkScrapePanel({ trainings }: BulkScrapePanelProps) {
 
           </>
         )}
-
-        {/* Asset Download (always visible) */}
-        <AssetDownloadPanel results={results} />
 
         {trainings.length === 0 && (
           <p className="text-center text-muted-foreground py-4">
