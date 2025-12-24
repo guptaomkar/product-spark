@@ -16,6 +16,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Download, Play, Loader2, CheckCircle, XCircle, Database } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { useUsageTracking } from '@/hooks/useUsageTracking';
+import { TrialLimitModal } from '@/components/trial/TrialLimitModal';
 
 interface BulkScrapePanelProps {
   trainings: ManufacturerTraining[];
@@ -27,6 +29,9 @@ export function BulkScrapePanel({ trainings }: BulkScrapePanelProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [results, setResults] = useState<BulkScrapeResult[]>([]);
   const [progress, setProgress] = useState(0);
+  const [showTrialModal, setShowTrialModal] = useState(false);
+
+  const { canMakeRequest, remainingCredits, consumeCredit, isTrialMode } = useUsageTracking();
 
   const selectedTraining = trainings.find(t => t.manufacturer === selectedManufacturer);
 
@@ -46,6 +51,18 @@ export function BulkScrapePanel({ trainings }: BulkScrapePanelProps) {
       return;
     }
 
+    // Check if user has enough credits
+    if (!canMakeRequest) {
+      setShowTrialModal(true);
+      return;
+    }
+
+    // Check if user has enough credits for all URLs
+    if (isTrialMode && urlList.length > remainingCredits) {
+      toast.error(`You only have ${remainingCredits} credits remaining. Please reduce the number of URLs or sign up for more credits.`);
+      return;
+    }
+
     setIsProcessing(true);
     setResults([]);
     setProgress(0);
@@ -55,6 +72,14 @@ export function BulkScrapePanel({ trainings }: BulkScrapePanelProps) {
     for (let i = 0; i < urlList.length; i++) {
       const url = urlList[i];
       
+      // Consume credit for each URL scraped
+      const creditConsumed = await consumeCredit('bulk_scrape');
+      if (!creditConsumed) {
+        toast.error('No credits remaining. Please sign up for more credits.');
+        setShowTrialModal(true);
+        break;
+      }
+
       try {
         const { data, error } = await supabase.functions.invoke('scrape-assets', {
           body: {
@@ -88,8 +113,10 @@ export function BulkScrapePanel({ trainings }: BulkScrapePanelProps) {
     }
 
     setIsProcessing(false);
-    toast.success(`Completed scraping ${urlList.length} URLs`);
-  }, [selectedTraining, urls]);
+    if (allResults.length > 0) {
+      toast.success(`Completed scraping ${allResults.length} URLs`);
+    }
+  }, [selectedTraining, urls, canMakeRequest, remainingCredits, consumeCredit, isTrialMode]);
 
   const handleDownloadResults = useCallback(() => {
     if (results.length === 0) return;
@@ -256,6 +283,8 @@ export function BulkScrapePanel({ trainings }: BulkScrapePanelProps) {
           </p>
         )}
       </CardContent>
+
+      <TrialLimitModal open={showTrialModal} onOpenChange={setShowTrialModal} />
     </Card>
   );
 }
