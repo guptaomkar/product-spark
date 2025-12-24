@@ -41,15 +41,350 @@ export type Database = {
         }
         Relationships: []
       }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          id: string
+          plan_tier: Database["public"]["Enums"]["plan_tier"]
+          razorpay_order_id: string | null
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          status: string
+          subscription_id: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          id?: string
+          plan_tier: Database["public"]["Enums"]["plan_tier"]
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          status?: string
+          subscription_id?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          id?: string
+          plan_tier?: Database["public"]["Enums"]["plan_tier"]
+          razorpay_order_id?: string | null
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          status?: string
+          subscription_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "user_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          features: Json | null
+          id: string
+          is_active: boolean
+          max_devices: number
+          monthly_credits: number
+          name: string
+          price_monthly: number
+          price_yearly: number
+          tier: Database["public"]["Enums"]["plan_tier"]
+        }
+        Insert: {
+          created_at?: string
+          features?: Json | null
+          id?: string
+          is_active?: boolean
+          max_devices?: number
+          monthly_credits: number
+          name: string
+          price_monthly?: number
+          price_yearly?: number
+          tier: Database["public"]["Enums"]["plan_tier"]
+        }
+        Update: {
+          created_at?: string
+          features?: Json | null
+          id?: string
+          is_active?: boolean
+          max_devices?: number
+          monthly_credits?: number
+          name?: string
+          price_monthly?: number
+          price_yearly?: number
+          tier?: Database["public"]["Enums"]["plan_tier"]
+        }
+        Relationships: []
+      }
+      trial_usage: {
+        Row: {
+          first_request_at: string
+          id: string
+          ip_address: string
+          last_request_at: string
+          max_requests: number
+          requests_used: number
+        }
+        Insert: {
+          first_request_at?: string
+          id?: string
+          ip_address: string
+          last_request_at?: string
+          max_requests?: number
+          requests_used?: number
+        }
+        Update: {
+          first_request_at?: string
+          id?: string
+          ip_address?: string
+          last_request_at?: string
+          max_requests?: number
+          requests_used?: number
+        }
+        Relationships: []
+      }
+      usage_logs: {
+        Row: {
+          created_at: string
+          credits_used: number
+          feature: string
+          id: string
+          ip_address: string | null
+          request_data: Json | null
+          response_summary: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          feature: string
+          id?: string
+          ip_address?: string | null
+          request_data?: Json | null
+          response_summary?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          feature?: string
+          id?: string
+          ip_address?: string | null
+          request_data?: Json | null
+          response_summary?: Json | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_devices: {
+        Row: {
+          browser: string | null
+          created_at: string
+          device_fingerprint: string
+          device_name: string | null
+          id: string
+          ip_address: string | null
+          is_active: boolean
+          last_used_at: string
+          os: string | null
+          user_id: string
+        }
+        Insert: {
+          browser?: string | null
+          created_at?: string
+          device_fingerprint: string
+          device_name?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          last_used_at?: string
+          os?: string | null
+          user_id: string
+        }
+        Update: {
+          browser?: string | null
+          created_at?: string
+          device_fingerprint?: string
+          device_name?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean
+          last_used_at?: string
+          os?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_enrichment_data: {
+        Row: {
+          attributes: Json
+          created_at: string
+          file_name: string
+          id: string
+          products_count: number
+          results: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attributes?: Json
+          created_at?: string
+          file_name: string
+          id?: string
+          products_count?: number
+          results?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attributes?: Json
+          created_at?: string
+          file_name?: string
+          id?: string
+          products_count?: number
+          results?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_subscriptions: {
+        Row: {
+          billing_cycle: string
+          created_at: string
+          credits_remaining: number
+          credits_used: number
+          current_period_end: string
+          current_period_start: string
+          id: string
+          plan_id: string
+          razorpay_customer_id: string | null
+          razorpay_subscription_id: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          billing_cycle?: string
+          created_at?: string
+          credits_remaining?: number
+          credits_used?: number
+          current_period_end?: string
+          current_period_start?: string
+          id?: string
+          plan_id: string
+          razorpay_customer_id?: string | null
+          razorpay_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          billing_cycle?: string
+          created_at?: string
+          credits_remaining?: number
+          credits_used?: number
+          current_period_end?: string
+          current_period_start?: string
+          id?: string
+          plan_id?: string
+          razorpay_customer_id?: string | null
+          razorpay_subscription_id?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
+      plan_tier: "trial" | "basic" | "pro" | "enterprise"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -176,6 +511,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+      plan_tier: ["trial", "basic", "pro", "enterprise"],
+    },
   },
 } as const
