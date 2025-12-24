@@ -3,6 +3,7 @@ import { Product, AttributeDefinition, EnrichmentStats, FileValidationResult } f
 import { getAttributesForCategory, exportToExcel } from '@/lib/fileParser';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useUsageTracking } from './useUsageTracking';
 
 // Real enrichment using Oxylabs API via edge function
 const enrichProduct = async (
@@ -37,6 +38,7 @@ export function useEnrichment() {
   const [products, setProducts] = useState<Product[]>([]);
   const [attributes, setAttributes] = useState<AttributeDefinition[]>([]);
   const [isEnriching, setIsEnriching] = useState(false);
+  const { canMakeRequest, consumeCredit, showUpgradePrompt, remainingCredits } = useUsageTracking();
 
   const stats = useMemo<EnrichmentStats>(() => {
     return {
@@ -57,12 +59,40 @@ export function useEnrichment() {
   const startEnrichment = useCallback(async () => {
     if (isEnriching || products.length === 0) return;
     
+    // Check if user can make requests
+    if (!canMakeRequest) {
+      if (showUpgradePrompt) {
+        toast.error('Trial limit reached. Please sign up to continue.');
+      } else {
+        toast.error('No credits remaining. Please upgrade your plan.');
+      }
+      return;
+    }
+
+    // Check if enough credits for all pending products
+    const pendingCount = products.filter(p => p.status === 'pending').length;
+    if (pendingCount > remainingCredits) {
+      toast.warning(`You have ${remainingCredits} credits but ${pendingCount} products to enrich. Some products may not be processed.`);
+    }
+    
     setIsEnriching(true);
     
     // Process products sequentially to avoid rate limiting
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
       if (product.status !== 'pending') continue;
+      
+      // Check and consume credit before each product
+      if (!canMakeRequest) {
+        toast.error('Credit limit reached. Stopping enrichment.');
+        break;
+      }
+
+      const creditConsumed = await consumeCredit('enrichment');
+      if (!creditConsumed) {
+        toast.error('Failed to consume credit. Stopping enrichment.');
+        break;
+      }
       
       // Update status to processing
       setProducts(prev => prev.map((p, idx) => 
@@ -94,7 +124,8 @@ export function useEnrichment() {
     }
     
     setIsEnriching(false);
-  }, [isEnriching, products, attributes]);
+    toast.success('Enrichment completed');
+  }, [isEnriching, products, attributes, canMakeRequest, consumeCredit, showUpgradePrompt, remainingCredits]);
 
   const resetEnrichment = useCallback(() => {
     setProducts(prev => prev.map(p => ({
@@ -130,5 +161,7 @@ export function useEnrichment() {
     resetEnrichment,
     downloadResults,
     clearData,
+    canMakeRequest,
+    showUpgradePrompt,
   };
 }
