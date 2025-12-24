@@ -1,26 +1,29 @@
-import { Product, AttributeDefinition } from '@/types/enrichment';
-import { getAttributesForCategory } from '@/lib/fileParser';
-import { CheckCircle2, Clock, AlertCircle, Loader2, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { useState } from 'react';
+import { Product, AttributeDefinition } from "@/types/enrichment";
+import { getAttributesForCategory } from "@/lib/fileParser";
+import { CheckCircle2, Clock, AlertCircle, Loader2, XCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from "react";
 
 interface ProductTableProps {
   products: Product[];
   attributes: AttributeDefinition[];
 }
 
-const statusConfig: Record<Product['status'], { icon: typeof Clock; color: string; bg: string; label: string; animate?: boolean }> = {
-  pending: { icon: Clock, color: 'text-muted-foreground', bg: 'bg-muted/50', label: 'Pending' },
-  processing: { icon: Loader2, color: 'text-primary', bg: 'bg-primary/10', label: 'Processing', animate: true },
-  success: { icon: CheckCircle2, color: 'text-success', bg: 'bg-success/10', label: 'Success' },
-  partial: { icon: AlertCircle, color: 'text-warning', bg: 'bg-warning/10', label: 'Partial' },
-  failed: { icon: XCircle, color: 'text-destructive', bg: 'bg-destructive/10', label: 'Failed' },
+const statusConfig: Record<
+  Product["status"],
+  { icon: typeof Clock; color: string; bg: string; label: string; animate?: boolean }
+> = {
+  pending: { icon: Clock, color: "text-muted-foreground", bg: "bg-muted/50", label: "Pending" },
+  processing: { icon: Loader2, color: "text-primary", bg: "bg-primary/10", label: "Processing", animate: true },
+  success: { icon: CheckCircle2, color: "text-success", bg: "bg-success/10", label: "Success" },
+  partial: { icon: AlertCircle, color: "text-warning", bg: "bg-warning/10", label: "Partial" },
+  failed: { icon: XCircle, color: "text-destructive", bg: "bg-destructive/10", label: "Failed" },
 };
 
 export function ProductTable({ products, attributes }: ProductTableProps) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
-  
+
   // Get all unique attributes
-  const allAttributes = [...new Set(attributes.map(a => a.attributeName))];
+  const allAttributes = [...new Set(attributes.map((a) => a.attributeName))];
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden animate-fade-in">
@@ -32,16 +35,19 @@ export function ProductTable({ products, attributes }: ProductTableProps) {
                 Status
               </th>
               <th className="data-cell text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                MFR
+                Manufacturer name
               </th>
               <th className="data-cell text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                MPN
+                Manufacturer Part Number
               </th>
               <th className="data-cell text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Category
               </th>
-              {allAttributes.slice(0, 4).map(attr => (
-                <th key={attr} className="data-cell text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden lg:table-cell">
+              {allAttributes.slice(0, 4).map((attr) => (
+                <th
+                  key={attr}
+                  className="data-cell text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider hidden lg:table-cell"
+                >
                   {attr}
                 </th>
               ))}
@@ -56,13 +62,13 @@ export function ProductTable({ products, attributes }: ProductTableProps) {
               const StatusIcon = status.icon;
               const isExpanded = expandedRow === product.id;
               const categoryAttributes = getAttributesForCategory(product.category, attributes);
-              
+
               return (
                 <>
                   <tr key={product.id} className="hover:bg-muted/20 transition-colors">
                     <td className="data-cell">
                       <span className={`status-badge ${status.bg} ${status.color}`}>
-                        <StatusIcon className={`w-3 h-3 ${status.animate ? 'animate-spin' : ''}`} />
+                        <StatusIcon className={`w-3 h-3 ${status.animate ? "animate-spin" : ""}`} />
                         <span className="hidden sm:inline">{status.label}</span>
                       </span>
                     </td>
@@ -73,9 +79,9 @@ export function ProductTable({ products, attributes }: ProductTableProps) {
                         {product.category}
                       </span>
                     </td>
-                    {allAttributes.slice(0, 4).map(attr => (
+                    {allAttributes.slice(0, 4).map((attr) => (
                       <td key={attr} className="data-cell text-muted-foreground hidden lg:table-cell">
-                        {product.enrichedData?.[attr] || '—'}
+                        {product.enrichedData?.[attr] || "—"}
                       </td>
                     ))}
                     <td className="data-cell">
@@ -98,7 +104,7 @@ export function ProductTable({ products, attributes }: ProductTableProps) {
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">Category Attributes</p>
                             <div className="flex flex-wrap gap-1">
-                              {categoryAttributes.map(attr => (
+                              {categoryAttributes.map((attr) => (
                                 <span key={attr} className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded">
                                   {attr}
                                 </span>
@@ -112,7 +118,7 @@ export function ProductTable({ products, attributes }: ProductTableProps) {
                                 {Object.entries(product.enrichedData).map(([key, value]) => (
                                   <div key={key} className="bg-card p-2 rounded border border-border">
                                     <p className="text-xs text-muted-foreground">{key}</p>
-                                    <p className="text-sm font-mono text-foreground">{value || '—'}</p>
+                                    <p className="text-sm font-mono text-foreground">{value || "—"}</p>
                                   </div>
                                 ))}
                               </div>
@@ -134,7 +140,7 @@ export function ProductTable({ products, attributes }: ProductTableProps) {
           </tbody>
         </table>
       </div>
-      
+
       {products.length === 0 && (
         <div className="p-12 text-center text-muted-foreground">
           <p>No products loaded yet</p>
