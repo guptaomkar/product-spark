@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
-import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { parseExcelFile } from '@/lib/fileParser';
-import { FileValidationResult } from '@/types/enrichment';
+import { useState, useCallback } from "react";
+import { Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { parseExcelFile } from "@/lib/fileParser";
+import { FileValidationResult } from "@/types/enrichment";
 
 interface FileUploadProps {
   onFileProcessed: (result: FileValidationResult) => void;
@@ -25,12 +25,12 @@ export function FileUpload({ onFileProcessed }: FileUploadProps) {
   }, []);
 
   const processFile = async (file: File) => {
-    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
       setValidationResult({
         isValid: false,
-        errors: ['Please upload a valid Excel file (.xlsx or .xls)'],
+        errors: ["Please upload a valid Excel file (.xlsx or .xls)"],
         products: [],
-        attributes: []
+        attributes: [],
       });
       return;
     }
@@ -47,9 +47,9 @@ export function FileUpload({ onFileProcessed }: FileUploadProps) {
     } catch (error) {
       setValidationResult({
         isValid: false,
-        errors: [error instanceof Error ? error.message : 'Failed to process file'],
+        errors: [error instanceof Error ? error.message : "Failed to process file"],
         products: [],
-        attributes: []
+        attributes: [],
       });
     } finally {
       setIsProcessing(false);
@@ -77,11 +77,12 @@ export function FileUpload({ onFileProcessed }: FileUploadProps) {
         className={`
           relative border-2 border-dashed rounded-xl p-12 text-center
           transition-all duration-300 cursor-pointer
-          ${isDragging 
-            ? 'border-primary bg-primary/5 scale-[1.02]' 
-            : 'border-border hover:border-primary/50 hover:bg-card/50'
+          ${
+            isDragging
+              ? "border-primary bg-primary/5 scale-[1.02]"
+              : "border-border hover:border-primary/50 hover:bg-card/50"
           }
-          ${isProcessing ? 'pointer-events-none opacity-70' : ''}
+          ${isProcessing ? "pointer-events-none opacity-70" : ""}
         `}
       >
         <input
@@ -91,29 +92,29 @@ export function FileUpload({ onFileProcessed }: FileUploadProps) {
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           disabled={isProcessing}
         />
-        
+
         <div className="flex flex-col items-center gap-4">
-          <div className={`
+          <div
+            className={`
             w-16 h-16 rounded-2xl flex items-center justify-center
             transition-all duration-300
-            ${isDragging ? 'bg-primary/20 scale-110' : 'bg-secondary'}
-          `}>
+            ${isDragging ? "bg-primary/20 scale-110" : "bg-secondary"}
+          `}
+          >
             {isProcessing ? (
               <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             ) : (
-              <Upload className={`w-8 h-8 ${isDragging ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Upload className={`w-8 h-8 ${isDragging ? "text-primary" : "text-muted-foreground"}`} />
             )}
           </div>
-          
+
           <div>
             <p className="text-lg font-medium text-foreground">
-              {isProcessing ? 'Processing file...' : 'Drop your Excel file here'}
+              {isProcessing ? "Processing file..." : "Drop your Excel file here"}
             </p>
-            <p className="text-sm text-muted-foreground mt-1">
-              or click to browse
-            </p>
+            <p className="text-sm text-muted-foreground mt-1">or click to browse</p>
           </div>
-          
+
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <FileSpreadsheet className="w-4 h-4" />
             <span>Supports .xlsx and .xls files</span>
@@ -122,30 +123,29 @@ export function FileUpload({ onFileProcessed }: FileUploadProps) {
       </div>
 
       {validationResult && (
-        <div className={`
+        <div
+          className={`
           mt-6 p-4 rounded-lg border animate-slide-up
-          ${validationResult.isValid 
-            ? 'bg-success/10 border-success/30' 
-            : 'bg-destructive/10 border-destructive/30'
-          }
-        `}>
+          ${validationResult.isValid ? "bg-success/10 border-success/30" : "bg-destructive/10 border-destructive/30"}
+        `}
+        >
           <div className="flex items-start gap-3">
             {validationResult.isValid ? (
               <CheckCircle2 className="w-5 h-5 text-success mt-0.5" />
             ) : (
               <AlertCircle className="w-5 h-5 text-destructive mt-0.5" />
             )}
-            
+
             <div className="flex-1">
-              <p className={`font-medium ${validationResult.isValid ? 'text-success' : 'text-destructive'}`}>
-                {validationResult.isValid ? 'File validated successfully!' : 'Validation errors found'}
+              <p className={`font-medium ${validationResult.isValid ? "text-success" : "text-destructive"}`}>
+                {validationResult.isValid ? "File validated successfully!" : "Validation errors found"}
               </p>
-              
+
               {validationResult.isValid ? (
                 <div className="mt-2 text-sm text-muted-foreground">
                   <p>• {validationResult.products.length} products found</p>
                   <p>• {validationResult.attributes.length} attribute mappings found</p>
-                  <p>• {[...new Set(validationResult.attributes.map(a => a.category))].length} categories defined</p>
+                  <p>• {[...new Set(validationResult.attributes.map((a) => a.category))].length} categories defined</p>
                 </div>
               ) : (
                 <ul className="mt-2 text-sm text-destructive/80 space-y-1">
@@ -168,7 +168,7 @@ export function FileUpload({ onFileProcessed }: FileUploadProps) {
           <div>
             <p className="text-xs font-medium text-primary mb-2">Sheet 1: Product Master</p>
             <div className="font-mono text-xs bg-muted/50 rounded p-3 text-muted-foreground">
-              <p>MFR | MPN | Category</p>
+              <p>Manufacturer name | Manufacturer Part Number | Category</p>
               <p className="text-muted-foreground/60 mt-1">Acme | ABC-123 | Electronics</p>
             </div>
           </div>
