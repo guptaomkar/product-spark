@@ -290,7 +290,7 @@ export default function AdminDashboard() {
                   <div 
                     key={u.id} 
                     className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => navigate(`/admin/users/${u.id}`)}
+                    onClick={() => navigate(`/admin/user/${u.id}`)}
                   >
                     <div className="flex items-center gap-4">
                       <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
