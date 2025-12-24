@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface TrialUsage {
@@ -8,7 +8,16 @@ interface TrialUsage {
   isLimitReached: boolean;
 }
 
-export function useTrialUsage() {
+interface TrialUsageContextType {
+  trialUsage: TrialUsage;
+  isLoading: boolean;
+  consumeTrialCredit: (feature: string) => Promise<boolean>;
+  refreshTrialUsage: () => Promise<void>;
+}
+
+const TrialUsageContext = createContext<TrialUsageContextType | undefined>(undefined);
+
+export function TrialUsageProvider({ children }: { children: ReactNode }) {
   const [trialUsage, setTrialUsage] = useState<TrialUsage>({
     requestsUsed: 0,
     maxRequests: 10,
@@ -26,7 +35,6 @@ export function useTrialUsage() {
       return data.ip;
     } catch (error) {
       console.error('Error fetching IP:', error);
-      // Fallback to localStorage-based tracking
       const fallbackId = localStorage.getItem('trial_id') || crypto.randomUUID();
       localStorage.setItem('trial_id', fallbackId);
       setIpAddress(fallbackId);
@@ -53,7 +61,6 @@ export function useTrialUsage() {
         };
         setTrialUsage(usage);
       } else {
-        // No trial record yet - full trial available
         setTrialUsage({
           requestsUsed: 0,
           maxRequests: 10,
@@ -83,7 +90,6 @@ export function useTrialUsage() {
     if (trialUsage.isLimitReached) return false;
 
     try {
-      // Check if record exists
       const { data: existing } = await supabase
         .from('trial_usage')
         .select('*')
@@ -91,7 +97,6 @@ export function useTrialUsage() {
         .maybeSingle();
 
       if (existing) {
-        // Update existing record
         const { error } = await supabase
           .from('trial_usage')
           .update({
@@ -102,7 +107,6 @@ export function useTrialUsage() {
 
         if (error) throw error;
       } else {
-        // Insert new record
         const { error } = await supabase
           .from('trial_usage')
           .insert({
@@ -114,14 +118,23 @@ export function useTrialUsage() {
         if (error) throw error;
       }
 
-      // Refresh usage
-      await fetchTrialUsage(ipAddress);
+      // Immediately update local state for instant UI feedback
+      setTrialUsage(prev => {
+        const newUsed = prev.requestsUsed + 1;
+        return {
+          ...prev,
+          requestsUsed: newUsed,
+          remaining: Math.max(0, prev.maxRequests - newUsed),
+          isLimitReached: newUsed >= prev.maxRequests
+        };
+      });
+
       return true;
     } catch (error) {
       console.error('Error consuming trial credit:', error);
       return false;
     }
-  }, [ipAddress, trialUsage.isLimitReached, fetchTrialUsage]);
+  }, [ipAddress, trialUsage.isLimitReached]);
 
   const refreshTrialUsage = useCallback(async () => {
     if (ipAddress) {
@@ -129,10 +142,17 @@ export function useTrialUsage() {
     }
   }, [ipAddress, fetchTrialUsage]);
 
-  return {
-    trialUsage,
-    isLoading,
-    consumeTrialCredit,
-    refreshTrialUsage
-  };
+  return (
+    <TrialUsageContext.Provider value={{ trialUsage, isLoading, consumeTrialCredit, refreshTrialUsage }}>
+      {children}
+    </TrialUsageContext.Provider>
+  );
+}
+
+export function useTrialUsageContext() {
+  const context = useContext(TrialUsageContext);
+  if (!context) {
+    throw new Error('useTrialUsageContext must be used within TrialUsageProvider');
+  }
+  return context;
 }
