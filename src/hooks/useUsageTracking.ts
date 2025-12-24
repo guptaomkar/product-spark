@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTrialUsage } from './useTrialUsage';
+import { useTrialUsageContext } from '@/contexts/TrialUsageContext';
 import { useSubscription } from './useSubscription';
 
 interface UseUsageTrackingResult {
@@ -15,7 +15,7 @@ interface UseUsageTrackingResult {
 
 export function useUsageTracking(): UseUsageTrackingResult {
   const { user } = useAuth();
-  const { trialUsage, consumeTrialCredit } = useTrialUsage();
+  const { trialUsage, consumeTrialCredit } = useTrialUsageContext();
   const { subscription, consumeCredit: consumeSubscriptionCredit, hasCredits } = useSubscription();
 
   const isAuthenticated = !!user;
