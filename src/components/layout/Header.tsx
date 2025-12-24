@@ -1,11 +1,23 @@
-import { Database, Sparkles, Menu, X } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { Database, Sparkles, Menu, X, Download, User, LogOut, Settings, Shield } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
+import { CreditsBadge } from "@/components/credits/CreditsBadge";
+import { generateDemoTemplate } from "@/lib/demoTemplate";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function Header() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, isAdmin, signOut } = useAuth();
 
   const navLinks = [
     { name: "Home", path: "/" },
@@ -15,6 +27,11 @@ export function Header() {
   ];
 
   const isActive = (path: string) => location.pathname === path;
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate("/");
+  };
 
   return (
     <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
@@ -47,10 +64,55 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-primary">AI Ready</span>
-          </div>
+          {/* Demo Template Download */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={generateDemoTemplate}
+            className="hidden sm:flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Demo Template
+          </Button>
+
+          {/* Credits Badge */}
+          <CreditsBadge />
+
+          {/* User Menu or Auth Buttons */}
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <User className="w-5 h-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                  {user.email}
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/dashboard")}>
+                  <Settings className="w-4 h-4 mr-2" />
+                  Dashboard
+                </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => navigate("/admin")}>
+                    <Shield className="w-4 h-4 mr-2" />
+                    Admin Panel
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button variant="default" size="sm" onClick={() => navigate("/auth")}>
+              Sign In
+            </Button>
+          )}
 
           {/* Mobile Menu Button */}
           <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
@@ -77,6 +139,31 @@ export function Header() {
                 {link.name}
               </Link>
             ))}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                generateDemoTemplate();
+                setMobileMenuOpen(false);
+              }}
+              className="mt-2 flex items-center gap-2"
+            >
+              <Download className="w-4 h-4" />
+              Demo Template
+            </Button>
+            {!user && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => {
+                  navigate("/auth");
+                  setMobileMenuOpen(false);
+                }}
+                className="mt-2"
+              >
+                Sign In
+              </Button>
+            )}
           </nav>
         </div>
       )}
