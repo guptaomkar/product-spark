@@ -322,6 +322,7 @@ export type Database = {
           current_period_end: string
           current_period_start: string
           id: string
+          max_devices_override: number | null
           plan_id: string
           razorpay_customer_id: string | null
           razorpay_subscription_id: string | null
@@ -337,6 +338,7 @@ export type Database = {
           current_period_end?: string
           current_period_start?: string
           id?: string
+          max_devices_override?: number | null
           plan_id: string
           razorpay_customer_id?: string | null
           razorpay_subscription_id?: string | null
@@ -352,6 +354,7 @@ export type Database = {
           current_period_end?: string
           current_period_start?: string
           id?: string
+          max_devices_override?: number | null
           plan_id?: string
           razorpay_customer_id?: string | null
           razorpay_subscription_id?: string | null

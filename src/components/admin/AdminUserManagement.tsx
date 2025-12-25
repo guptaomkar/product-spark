@@ -174,7 +174,7 @@ export function DeviceManagementDialog({
     try {
       const { error } = await supabase
         .from('user_subscriptions')
-        .update({ max_devices: devices })
+        .update({ max_devices_override: devices })
         .eq('user_id', userId);
 
       if (error) throw error;

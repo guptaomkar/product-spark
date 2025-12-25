@@ -105,22 +105,27 @@ export function useDeviceTracking() {
     }
   }, [user]);
 
-  // Get max devices from subscription
+  // Get max devices from subscription (considering override)
   const fetchMaxDevices = useCallback(async () => {
     if (!user) return;
 
     try {
       const { data, error } = await supabase
         .from('user_subscriptions')
-        .select('subscription_plans(max_devices)')
+        .select('max_devices_override, subscription_plans(max_devices)')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (error) throw error;
 
-      const plan = data?.subscription_plans as unknown as { max_devices: number } | null;
-      if (plan) {
-        setMaxDevices(plan.max_devices);
+      // Use override if set, otherwise use plan default
+      if (data?.max_devices_override) {
+        setMaxDevices(data.max_devices_override);
+      } else {
+        const plan = data?.subscription_plans as unknown as { max_devices: number } | null;
+        if (plan) {
+          setMaxDevices(plan.max_devices);
+        }
       }
     } catch (error) {
       console.error('Error fetching max devices:', error);

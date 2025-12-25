@@ -14,8 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ArrowLeft, User, CreditCard, Laptop, Activity, Mail, Calendar, Shield } from 'lucide-react';
+import { CreditManagementDialog, DeviceManagementDialog } from '@/components/admin/AdminUserManagement';
+import { ArrowLeft, User, CreditCard, Laptop, Activity, Mail, Calendar, Shield, Pencil, Smartphone, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 
 interface UserProfile {
   id: string;
@@ -34,6 +36,8 @@ interface UserSubscriptionDetail {
   creditsUsed: number;
   currentPeriodEnd: string;
   billingCycle: string;
+  maxDevices: number;
+  maxDevicesOverride: number | null;
 }
 
 interface UserDevice {
@@ -74,6 +78,9 @@ export default function AdminUserDetail() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>('user');
+  
+  const [creditDialogOpen, setCreditDialogOpen] = useState(false);
+  const [deviceDialogOpen, setDeviceDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -81,128 +88,147 @@ export default function AdminUserDetail() {
     }
   }, [isAdmin, authLoading, navigate]);
 
-  useEffect(() => {
+  const fetchUserData = async () => {
     if (!userId || !isAdmin) return;
+    
+    setIsLoading(true);
 
-    const fetchUserData = async () => {
-      setIsLoading(true);
+    try {
+      // Fetch profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-      try {
-        // Fetch profile
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (profileData) {
-          setProfile({
-            id: profileData.id,
-            userId: profileData.user_id,
-            email: profileData.email,
-            fullName: profileData.full_name,
-            createdAt: profileData.created_at
-          });
-        }
-
-        // Fetch role
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (roleData) {
-          setUserRole(roleData.role);
-        }
-
-        // Fetch subscription with plan details
-        const { data: subData } = await supabase
-          .from('user_subscriptions')
-          .select('*, subscription_plans(*)')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        if (subData) {
-          const plan = subData.subscription_plans as unknown as { 
-            name: string; 
-            tier: string 
-          } | null;
-          
-          setSubscription({
-            id: subData.id,
-            planName: plan?.name || 'Unknown',
-            planTier: plan?.tier || 'unknown',
-            status: subData.status,
-            creditsRemaining: subData.credits_remaining,
-            creditsUsed: subData.credits_used,
-            currentPeriodEnd: subData.current_period_end,
-            billingCycle: subData.billing_cycle
-          });
-        }
-
-        // Fetch devices
-        const { data: deviceData } = await supabase
-          .from('user_devices')
-          .select('*')
-          .eq('user_id', userId)
-          .order('last_used_at', { ascending: false });
-
-        if (deviceData) {
-          setDevices(deviceData.map(d => ({
-            id: d.id,
-            deviceName: d.device_name,
-            browser: d.browser,
-            os: d.os,
-            ipAddress: d.ip_address,
-            lastUsedAt: d.last_used_at,
-            isActive: d.is_active
-          })));
-        }
-
-        // Fetch usage logs
-        const { data: usageData } = await supabase
-          .from('usage_logs')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(50);
-
-        if (usageData) {
-          setUsageLogs(usageData.map(u => ({
-            id: u.id,
-            feature: u.feature,
-            creditsUsed: u.credits_used,
-            createdAt: u.created_at
-          })));
-        }
-
-        // Fetch payments
-        const { data: paymentData } = await supabase
-          .from('payments')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false });
-
-        if (paymentData) {
-          setPayments(paymentData.map(p => ({
-            id: p.id,
-            amount: Number(p.amount),
-            currency: p.currency,
-            status: p.status,
-            planTier: p.plan_tier,
-            createdAt: p.created_at
-          })));
-        }
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-      } finally {
-        setIsLoading(false);
+      if (profileData) {
+        setProfile({
+          id: profileData.id,
+          userId: profileData.user_id,
+          email: profileData.email,
+          fullName: profileData.full_name,
+          createdAt: profileData.created_at
+        });
       }
-    };
 
+      // Fetch role
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (roleData) {
+        setUserRole(roleData.role);
+      }
+
+      // Fetch subscription with plan details
+      const { data: subData } = await supabase
+        .from('user_subscriptions')
+        .select('*, subscription_plans(*)')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (subData) {
+        const plan = subData.subscription_plans as unknown as { 
+          name: string; 
+          tier: string;
+          max_devices: number;
+        } | null;
+        
+        setSubscription({
+          id: subData.id,
+          planName: plan?.name || 'Unknown',
+          planTier: plan?.tier || 'unknown',
+          status: subData.status,
+          creditsRemaining: subData.credits_remaining,
+          creditsUsed: subData.credits_used,
+          currentPeriodEnd: subData.current_period_end,
+          billingCycle: subData.billing_cycle,
+          maxDevices: plan?.max_devices || 1,
+          maxDevicesOverride: subData.max_devices_override,
+        });
+      }
+
+      // Fetch devices
+      const { data: deviceData } = await supabase
+        .from('user_devices')
+        .select('*')
+        .eq('user_id', userId)
+        .order('last_used_at', { ascending: false });
+
+      if (deviceData) {
+        setDevices(deviceData.map(d => ({
+          id: d.id,
+          deviceName: d.device_name,
+          browser: d.browser,
+          os: d.os,
+          ipAddress: d.ip_address,
+          lastUsedAt: d.last_used_at,
+          isActive: d.is_active
+        })));
+      }
+
+      // Fetch usage logs
+      const { data: usageData } = await supabase
+        .from('usage_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (usageData) {
+        setUsageLogs(usageData.map(u => ({
+          id: u.id,
+          feature: u.feature,
+          creditsUsed: u.credits_used,
+          createdAt: u.created_at
+        })));
+      }
+
+      // Fetch payments
+      const { data: paymentData } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (paymentData) {
+        setPayments(paymentData.map(p => ({
+          id: p.id,
+          amount: Number(p.amount),
+          currency: p.currency,
+          status: p.status,
+          planTier: p.plan_tier,
+          createdAt: p.created_at
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchUserData();
   }, [userId, isAdmin]);
+
+  const handleRemoveDevice = async (deviceId: string) => {
+    try {
+      const { error } = await supabase
+        .from('user_devices')
+        .update({ is_active: false })
+        .eq('id', deviceId);
+
+      if (error) throw error;
+      toast.success('Device deactivated successfully');
+      fetchUserData();
+    } catch (error) {
+      console.error('Error removing device:', error);
+      toast.error('Failed to deactivate device');
+    }
+  };
 
   if (authLoading || isLoading) {
     return (
@@ -235,9 +261,14 @@ export default function AdminUserDetail() {
       case 'active': return 'bg-green-500/20 text-green-400';
       case 'cancelled': return 'bg-red-500/20 text-red-400';
       case 'expired': return 'bg-gray-500/20 text-gray-400';
+      case 'completed': return 'bg-green-500/20 text-green-400';
+      case 'pending': return 'bg-yellow-500/20 text-yellow-400';
       default: return 'bg-amber-500/20 text-amber-400';
     }
   };
+
+  const effectiveMaxDevices = subscription?.maxDevicesOverride || subscription?.maxDevices || 1;
+  const activeDevicesCount = devices.filter(d => d.isActive).length;
 
   return (
     <div className="min-h-screen bg-background">
@@ -287,10 +318,22 @@ export default function AdminUserDetail() {
           {/* Subscription Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-primary" />
-                Subscription
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-primary" />
+                  Subscription
+                </CardTitle>
+                {subscription && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setCreditDialogOpen(true)}
+                  >
+                    <Pencil className="w-4 h-4 mr-1" />
+                    Manage Credits
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {subscription ? (
@@ -333,10 +376,27 @@ export default function AdminUserDetail() {
           {/* Devices Card */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Laptop className="w-5 h-5 text-primary" />
-                Devices ({devices.length})
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Laptop className="w-5 h-5 text-primary" />
+                  Devices ({activeDevicesCount}/{effectiveMaxDevices})
+                </CardTitle>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setDeviceDialogOpen(true)}
+                >
+                  <Pencil className="w-4 h-4 mr-1" />
+                  Set Limit
+                </Button>
+              </div>
+              <CardDescription>
+                {subscription?.maxDevicesOverride && (
+                  <span className="text-primary text-xs">
+                    Custom limit: {subscription.maxDevicesOverride} (Plan default: {subscription.maxDevices})
+                  </span>
+                )}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {devices.length > 0 ? (
@@ -346,15 +406,32 @@ export default function AdminUserDetail() {
                       key={device.id}
                       className="flex items-center justify-between p-2 rounded-lg bg-muted/30"
                     >
-                      <div>
-                        <p className="text-sm font-medium">{device.deviceName || 'Unknown'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {device.browser} / {device.os}
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <Smartphone className="w-4 h-4 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">{device.deviceName || 'Unknown'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {device.browser} / {device.os}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            IP: {device.ipAddress || 'N/A'}
+                          </p>
+                        </div>
                       </div>
-                      <Badge variant={device.isActive ? 'default' : 'secondary'}>
-                        {device.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={device.isActive ? 'default' : 'secondary'}>
+                          {device.isActive ? 'Active' : 'Inactive'}
+                        </Badge>
+                        {device.isActive && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveDevice(device.id)}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -442,6 +519,30 @@ export default function AdminUserDetail() {
           </CardContent>
         </Card>
       </main>
+
+      {/* Credit Management Dialog */}
+      {profile && subscription && (
+        <CreditManagementDialog
+          open={creditDialogOpen}
+          onOpenChange={setCreditDialogOpen}
+          userId={profile.userId}
+          userEmail={profile.email}
+          currentCredits={subscription.creditsRemaining}
+          onSuccess={fetchUserData}
+        />
+      )}
+
+      {/* Device Management Dialog */}
+      {profile && (
+        <DeviceManagementDialog
+          open={deviceDialogOpen}
+          onOpenChange={setDeviceDialogOpen}
+          userId={profile.userId}
+          userEmail={profile.email}
+          currentMaxDevices={effectiveMaxDevices}
+          onSuccess={fetchUserData}
+        />
+      )}
     </div>
   );
 }
