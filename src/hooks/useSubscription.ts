@@ -127,6 +127,11 @@ export function useSubscription() {
     if (!user || !subscription) return false;
     if (subscription.creditsRemaining < creditsToConsume) return false;
 
+    // Capture current values before optimistic update
+    const currentCreditsRemaining = subscription.creditsRemaining;
+    const currentCreditsUsed = subscription.creditsUsed;
+    const subscriptionId = subscription.id;
+
     // Immediately update local state for instant UI feedback
     setSubscription(prev => prev ? {
       ...prev,
@@ -135,14 +140,14 @@ export function useSubscription() {
     } : null);
 
     try {
-      // Update subscription credits in database
+      // Update subscription credits in database using captured values
       const { error: subError } = await supabase
         .from('user_subscriptions')
         .update({
-          credits_remaining: subscription.creditsRemaining - creditsToConsume,
-          credits_used: subscription.creditsUsed + creditsToConsume
+          credits_remaining: currentCreditsRemaining - creditsToConsume,
+          credits_used: currentCreditsUsed + creditsToConsume
         })
-        .eq('id', subscription.id);
+        .eq('id', subscriptionId);
 
       if (subError) {
         // Revert local state on error
