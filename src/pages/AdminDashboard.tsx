@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { useAuth } from '@/contexts/AuthContext';
@@ -7,6 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { AdminCharts } from '@/components/admin/AdminCharts';
+import { PlanManagement } from '@/components/admin/PlanManagement';
 import { 
   Shield, 
   Users, 
@@ -18,7 +28,11 @@ import {
   ChevronRight,
   TrendingUp,
   DollarSign,
-  Smartphone
+  Smartphone,
+  Download,
+  Filter,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -30,11 +44,15 @@ interface AdminUser {
   createdAt: string;
   subscription: {
     planName: string;
+    planTier: string;
     creditsRemaining: number;
     creditsUsed: number;
     status: string;
+    maxDevices: number;
+    maxDevicesOverride: number | null;
   } | null;
-  devicesCount: number;
+  activeDevicesCount: number;
+  totalDevicesCount: number;
   totalRequests: number;
 }
 
@@ -43,6 +61,10 @@ interface AdminStats {
   activeSubscriptions: number;
   totalRevenue: number;
   totalRequests: number;
+  trialUsers: number;
+  subscribedUsers: number;
+  totalCreditsUsed: number;
+  totalCreditsRemaining: number;
 }
 
 export default function AdminDashboard() {
@@ -51,6 +73,9 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('all');
+  const [planFilter, setPlanFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -60,114 +85,225 @@ export default function AdminDashboard() {
     }
   }, [user, isAdmin, authLoading, navigate]);
 
-  useEffect(() => {
-    const fetchAdminData = async () => {
-      if (!isAdmin) return;
+  const fetchAdminData = async () => {
+    if (!isAdmin) return;
 
-      try {
-        // Fetch profiles with subscriptions
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
+    try {
+      // Fetch profiles with subscriptions
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-        if (profilesError) throw profilesError;
+      if (profilesError) throw profilesError;
 
-        // Fetch subscriptions
-        const { data: subscriptions, error: subError } = await supabase
-          .from('user_subscriptions')
-          .select(`
-            *,
-            subscription_plans (name)
-          `);
+      // Fetch subscriptions with plan details
+      const { data: subscriptions, error: subError } = await supabase
+        .from('user_subscriptions')
+        .select(`
+          *,
+          subscription_plans (name, tier, max_devices)
+        `);
 
-        if (subError) throw subError;
+      if (subError) throw subError;
 
-        // Fetch device counts
-        const { data: devices, error: devicesError } = await supabase
-          .from('user_devices')
-          .select('user_id, id');
+      // Fetch device counts (all devices and active devices)
+      const { data: devices, error: devicesError } = await supabase
+        .from('user_devices')
+        .select('user_id, id, is_active');
 
-        if (devicesError) throw devicesError;
+      if (devicesError) throw devicesError;
 
-        // Fetch usage logs for request counts
-        const { data: usageLogs, error: logsError } = await supabase
-          .from('usage_logs')
-          .select('user_id, credits_used');
+      // Fetch usage logs for request counts
+      const { data: usageLogs, error: logsError } = await supabase
+        .from('usage_logs')
+        .select('user_id, credits_used');
 
-        if (logsError) throw logsError;
+      if (logsError) throw logsError;
 
-        // Fetch payments for revenue
-        const { data: payments, error: paymentsError } = await supabase
-          .from('payments')
-          .select('amount, status');
+      // Fetch payments for revenue (only completed payments)
+      const { data: payments, error: paymentsError } = await supabase
+        .from('payments')
+        .select('amount, status');
 
-        if (paymentsError) throw paymentsError;
+      if (paymentsError) throw paymentsError;
 
-        // Build user list
-        const deviceCounts: Record<string, number> = {};
-        devices?.forEach(d => {
-          deviceCounts[d.user_id] = (deviceCounts[d.user_id] || 0) + 1;
-        });
+      // Build device counts
+      const activeDeviceCounts: Record<string, number> = {};
+      const totalDeviceCounts: Record<string, number> = {};
+      devices?.forEach(d => {
+        totalDeviceCounts[d.user_id] = (totalDeviceCounts[d.user_id] || 0) + 1;
+        if (d.is_active) {
+          activeDeviceCounts[d.user_id] = (activeDeviceCounts[d.user_id] || 0) + 1;
+        }
+      });
 
-        const requestCounts: Record<string, number> = {};
-        usageLogs?.forEach(l => {
-          if (l.user_id) {
-            requestCounts[l.user_id] = (requestCounts[l.user_id] || 0) + l.credits_used;
-          }
-        });
+      const requestCounts: Record<string, number> = {};
+      usageLogs?.forEach(l => {
+        if (l.user_id) {
+          requestCounts[l.user_id] = (requestCounts[l.user_id] || 0) + l.credits_used;
+        }
+      });
 
-        const subMap: Record<string, any> = {};
-        subscriptions?.forEach(s => {
-          subMap[s.user_id] = s;
-        });
+      const subMap: Record<string, any> = {};
+      subscriptions?.forEach(s => {
+        subMap[s.user_id] = s;
+      });
 
-        const adminUsers: AdminUser[] = (profiles || []).map(p => ({
+      const adminUsers: AdminUser[] = (profiles || []).map(p => {
+        const sub = subMap[p.user_id];
+        const plan = sub?.subscription_plans as { name: string; tier: string; max_devices: number } | null;
+        
+        return {
           id: p.user_id,
           email: p.email,
           fullName: p.full_name,
           createdAt: p.created_at,
-          subscription: subMap[p.user_id] ? {
-            planName: (subMap[p.user_id].subscription_plans as any)?.name || 'Unknown',
-            creditsRemaining: subMap[p.user_id].credits_remaining,
-            creditsUsed: subMap[p.user_id].credits_used,
-            status: subMap[p.user_id].status
+          subscription: sub ? {
+            planName: plan?.name || 'Unknown',
+            planTier: plan?.tier || 'trial',
+            creditsRemaining: sub.credits_remaining,
+            creditsUsed: sub.credits_used,
+            status: sub.status,
+            maxDevices: plan?.max_devices || 1,
+            maxDevicesOverride: sub.max_devices_override,
           } : null,
-          devicesCount: deviceCounts[p.user_id] || 0,
+          activeDevicesCount: activeDeviceCounts[p.user_id] || 0,
+          totalDevicesCount: totalDeviceCounts[p.user_id] || 0,
           totalRequests: requestCounts[p.user_id] || 0
-        }));
+        };
+      });
 
-        setUsers(adminUsers);
+      setUsers(adminUsers);
 
-        // Calculate stats
-        const totalRevenue = payments
-          ?.filter(p => p.status === 'completed')
-          .reduce((sum, p) => sum + parseFloat(p.amount as unknown as string), 0) || 0;
+      // Calculate stats
+      const completedPayments = payments?.filter(p => p.status === 'completed') || [];
+      const totalRevenue = completedPayments.reduce((sum, p) => {
+        const amount = typeof p.amount === 'string' ? parseFloat(p.amount) : Number(p.amount);
+        return sum + (isNaN(amount) ? 0 : amount);
+      }, 0);
 
-        setStats({
-          totalUsers: profiles?.length || 0,
-          activeSubscriptions: subscriptions?.filter(s => s.status === 'active').length || 0,
-          totalRevenue,
-          totalRequests: usageLogs?.reduce((sum, l) => sum + l.credits_used, 0) || 0
-        });
+      const trialUsers = adminUsers.filter(u => 
+        !u.subscription || u.subscription.planTier === 'trial'
+      ).length;
+      
+      const subscribedUsers = adminUsers.filter(u => 
+        u.subscription && u.subscription.planTier !== 'trial' && u.subscription.status === 'active'
+      ).length;
 
-      } catch (error) {
-        console.error('Error fetching admin data:', error);
-        toast.error('Failed to load admin data');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+      const totalCreditsUsed = subscriptions?.reduce((sum, s) => sum + (s.credits_used || 0), 0) || 0;
+      const totalCreditsRemaining = subscriptions?.reduce((sum, s) => sum + (s.credits_remaining || 0), 0) || 0;
 
+      setStats({
+        totalUsers: profiles?.length || 0,
+        activeSubscriptions: subscriptions?.filter(s => s.status === 'active').length || 0,
+        totalRevenue,
+        totalRequests: usageLogs?.reduce((sum, l) => sum + l.credits_used, 0) || 0,
+        trialUsers,
+        subscribedUsers,
+        totalCreditsUsed,
+        totalCreditsRemaining,
+      });
+
+    } catch (error) {
+      console.error('Error fetching admin data:', error);
+      toast.error('Failed to load admin data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (isAdmin) {
       fetchAdminData();
     }
   }, [isAdmin]);
 
-  const filteredUsers = users.filter(u => 
-    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.fullName?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredUsers = useMemo(() => {
+    let filtered = users;
+
+    // Filter by tab (trial vs subscribed)
+    if (activeTab === 'trial') {
+      filtered = filtered.filter(u => !u.subscription || u.subscription.planTier === 'trial');
+    } else if (activeTab === 'subscribed') {
+      filtered = filtered.filter(u => u.subscription && u.subscription.planTier !== 'trial');
+    }
+
+    // Filter by plan
+    if (planFilter !== 'all') {
+      filtered = filtered.filter(u => u.subscription?.planTier === planFilter);
+    }
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(u => u.subscription?.status === statusFilter);
+    }
+
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(u => 
+        u.email.toLowerCase().includes(query) ||
+        u.fullName?.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [users, activeTab, planFilter, statusFilter, searchQuery]);
+
+  const csvEscape = (value: unknown) => {
+    const s = String(value ?? '');
+    if (/[\n\r,\"]/g.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
+  const handleExportUsers = () => {
+    if (filteredUsers.length === 0) {
+      toast.error('No users to export');
+      return;
+    }
+
+    const header = [
+      'Email',
+      'Full Name',
+      'Joined Date',
+      'Plan',
+      'Plan Tier',
+      'Status',
+      'Credits Remaining',
+      'Credits Used',
+      'Active Devices',
+      'Max Devices',
+      'Total Requests'
+    ];
+
+    const rows = filteredUsers.map((u) => [
+      u.email,
+      u.fullName || '',
+      format(new Date(u.createdAt), 'yyyy-MM-dd'),
+      u.subscription?.planName || 'No Plan',
+      u.subscription?.planTier || 'N/A',
+      u.subscription?.status || 'N/A',
+      u.subscription?.creditsRemaining || 0,
+      u.subscription?.creditsUsed || 0,
+      u.activeDevicesCount,
+      u.subscription?.maxDevicesOverride || u.subscription?.maxDevices || 1,
+      u.totalRequests,
+    ]);
+
+    const csvContent = [header, ...rows]
+      .map((row) => row.map(csvEscape).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `users_export_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Users exported successfully');
+  };
 
   if (authLoading || isLoading) {
     return (
@@ -178,6 +314,10 @@ export default function AdminDashboard() {
   }
 
   if (!isAdmin) return null;
+
+  const getEffectiveMaxDevices = (u: AdminUser) => {
+    return u.subscription?.maxDevicesOverride || u.subscription?.maxDevices || 1;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -260,22 +400,93 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Users Table */}
+        {/* Charts Section */}
+        {stats && (
+          <AdminCharts
+            trialUsers={stats.trialUsers}
+            subscribedUsers={stats.subscribedUsers}
+            totalCreditsUsed={stats.totalCreditsUsed}
+            totalCreditsRemaining={stats.totalCreditsRemaining}
+          />
+        )}
+
+        {/* Plan Management Section */}
+        <div className="mb-8">
+          <PlanManagement />
+        </div>
+
+        {/* Users Table with Tabs */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Users</CardTitle>
-                <CardDescription>Manage user accounts and subscriptions</CardDescription>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Users</CardTitle>
+                  <CardDescription>Manage user accounts and subscriptions</CardDescription>
+                </div>
+                <Button variant="outline" onClick={handleExportUsers}>
+                  <Download className="w-4 h-4 mr-2" />
+                  Export to Excel
+                </Button>
               </div>
-              <div className="relative w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
+              
+              {/* Tabs */}
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList>
+                  <TabsTrigger value="all" className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    All Users ({users.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="trial" className="flex items-center gap-2">
+                    <UserX className="w-4 h-4" />
+                    Trial Users ({stats?.trialUsers || 0})
+                  </TabsTrigger>
+                  <TabsTrigger value="subscribed" className="flex items-center gap-2">
+                    <UserCheck className="w-4 h-4" />
+                    Subscribed ({stats?.subscribedUsers || 0})
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <Select value={planFilter} onValueChange={setPlanFilter}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Plans</SelectItem>
+                      <SelectItem value="trial">Trial</SelectItem>
+                      <SelectItem value="basic">Basic</SelectItem>
+                      <SelectItem value="pro">Pro</SelectItem>
+                      <SelectItem value="enterprise">Enterprise</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      <SelectItem value="expired">Expired</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -315,11 +526,13 @@ export default function AdminDashboard() {
                           {u.subscription?.creditsRemaining || 0} credits left
                         </p>
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="flex items-center gap-2 text-muted-foreground" title="Active / Max Devices">
                         <Smartphone className="w-4 h-4" />
-                        <span className="text-sm">{u.devicesCount}</span>
+                        <span className="text-sm">
+                          {u.activeDevicesCount}/{getEffectiveMaxDevices(u)}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground">
+                      <div className="flex items-center gap-2 text-muted-foreground" title="Total Requests">
                         <TrendingUp className="w-4 h-4" />
                         <span className="text-sm">{u.totalRequests}</span>
                       </div>

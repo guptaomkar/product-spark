@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/layout/Header';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useDeviceTracking } from '@/hooks/useDeviceTracking';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +19,9 @@ import {
   Calendar,
   TrendingUp,
   Loader2,
-  Settings
+  Settings,
+  Smartphone,
+  Trash2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -38,6 +41,7 @@ interface UsageLog {
 export default function Dashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { subscription, plans, isLoading: subLoading } = useSubscription();
+  const { devices, maxDevices, isLoading: devicesLoading, removeDevice } = useDeviceTracking();
   const [usageLogs, setUsageLogs] = useState<UsageLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(true);
   const navigate = useNavigate();
@@ -269,6 +273,71 @@ export default function Dashboard() {
                     Upgrade
                   </Button>
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Devices Section */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Smartphone className="w-5 h-5" />
+              Active Devices
+            </CardTitle>
+            <CardDescription>
+              {devices.length} of {maxDevices} devices active
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {devicesLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : devices.length === 0 ? (
+              <div className="text-center py-4 text-muted-foreground">
+                No active devices found
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {devices.map((device) => (
+                  <div 
+                    key={device.id} 
+                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Smartphone className="w-5 h-5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {device.deviceName || 'Unknown Device'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {device.browser} / {device.os}
+                          {device.ipAddress && ` • IP: ${device.ipAddress}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Last active: {format(new Date(device.lastUsedAt), 'MMM dd, yyyy HH:mm')}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeDevice(device.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {devices.length >= maxDevices && (
+              <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+                <p className="text-sm text-amber-600 dark:text-amber-400">
+                  You've reached your device limit. Remove a device to log in from a new one.
+                </p>
               </div>
             )}
           </CardContent>
