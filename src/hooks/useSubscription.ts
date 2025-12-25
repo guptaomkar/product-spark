@@ -127,8 +127,15 @@ export function useSubscription() {
     if (!user || !subscription) return false;
     if (subscription.creditsRemaining < creditsToConsume) return false;
 
+    // Immediately update local state for instant UI feedback
+    setSubscription(prev => prev ? {
+      ...prev,
+      creditsRemaining: prev.creditsRemaining - creditsToConsume,
+      creditsUsed: prev.creditsUsed + creditsToConsume
+    } : null);
+
     try {
-      // Update subscription credits
+      // Update subscription credits in database
       const { error: subError } = await supabase
         .from('user_subscriptions')
         .update({
@@ -137,7 +144,15 @@ export function useSubscription() {
         })
         .eq('id', subscription.id);
 
-      if (subError) throw subError;
+      if (subError) {
+        // Revert local state on error
+        setSubscription(prev => prev ? {
+          ...prev,
+          creditsRemaining: prev.creditsRemaining + creditsToConsume,
+          creditsUsed: prev.creditsUsed - creditsToConsume
+        } : null);
+        throw subError;
+      }
 
       // Log usage
       const { error: logError } = await supabase
@@ -150,14 +165,12 @@ export function useSubscription() {
 
       if (logError) console.error('Error logging usage:', logError);
 
-      // Refresh subscription
-      await fetchSubscription();
       return true;
     } catch (error) {
       console.error('Error consuming credit:', error);
       return false;
     }
-  }, [user, subscription, fetchSubscription]);
+  }, [user, subscription]);
 
   const hasCredits = subscription ? subscription.creditsRemaining > 0 : false;
   const isPaidPlan = subscription?.plan?.tier !== 'trial' && subscription?.plan?.tier !== undefined;
