@@ -1,23 +1,44 @@
-import { useState, useCallback, useMemo } from 'react';
-import { Product, AttributeDefinition, EnrichmentStats, FileValidationResult } from '@/types/enrichment';
-import { getAttributesForCategory, exportToExcel } from '@/lib/fileParser';
+import { useCallback, useMemo, useState } from 'react';
+import type {
+  AttributeDefinition,
+  EnrichmentStats,
+  FileValidationResult,
+  Product,
+} from '@/types/enrichment';
+import { exportToExcel, getAttributesForCategory } from '@/lib/fileParser';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useUsageTracking } from './useUsageTracking';
 
 // Real enrichment using Oxylabs API via edge function
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${Math.round(ms / 1000)}s`));
+    }, ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 const enrichProduct = async (
-  product: Product, 
+  product: Product,
   attributes: string[]
 ): Promise<Record<string, string>> => {
   console.log(`[enrichProduct] Calling edge function for ${product.mfr} ${product.mpn}`);
-  
+
   const { data, error } = await supabase.functions.invoke('enrich-product', {
-    body: { 
-      mfr: product.mfr, 
-      mpn: product.mpn, 
-      attributes 
-    }
+    body: {
+      mfr: product.mfr,
+      mpn: product.mpn,
+      attributes,
+    },
   });
 
   if (error) {
@@ -25,12 +46,11 @@ const enrichProduct = async (
     throw new Error(error.message || 'Failed to call enrichment service');
   }
 
-  if (!data.success) {
-    console.error('[enrichProduct] Enrichment failed:', data.error);
-    throw new Error(data.error || 'Enrichment failed');
+  if (!data?.success) {
+    console.error('[enrichProduct] Enrichment failed:', data?.error);
+    throw new Error(data?.error || 'Enrichment failed');
   }
 
-  console.log('[enrichProduct] Enrichment successful:', data.data);
   return data.data || {};
 };
 
@@ -38,16 +58,17 @@ export function useEnrichment() {
   const [products, setProducts] = useState<Product[]>([]);
   const [attributes, setAttributes] = useState<AttributeDefinition[]>([]);
   const [isEnriching, setIsEnriching] = useState(false);
-  const { canMakeRequest, consumeCredit, showUpgradePrompt, remainingCredits, refreshCredits } = useUsageTracking();
+
+  const { canMakeRequest, consumeCredit, showUpgradePrompt, refreshCredits } = useUsageTracking();
 
   const stats = useMemo<EnrichmentStats>(() => {
     return {
       total: products.length,
-      pending: products.filter(p => p.status === 'pending').length,
-      processing: products.filter(p => p.status === 'processing').length,
-      success: products.filter(p => p.status === 'success').length,
-      partial: products.filter(p => p.status === 'partial').length,
-      failed: products.filter(p => p.status === 'failed').length,
+      pending: products.filter((p) => p.status === 'pending').length,
+      processing: products.filter((p) => p.status === 'processing').length,
+      success: products.filter((p) => p.status === 'success').length,
+      partial: products.filter((p) => p.status === 'partial').length,
+      failed: products.filter((p) => p.status === 'failed').length,
     };
   }, [products]);
 
@@ -59,13 +80,8 @@ export function useEnrichment() {
   const startEnrichment = useCallback(async () => {
     if (isEnriching || products.length === 0) return;
 
-    // Check if user can make requests
     if (!canMakeRequest) {
-      if (showUpgradePrompt) {
-        toast.error('Trial limit reached. Please sign up to continue.');
-      } else {
-        toast.error('No credits remaining. Please upgrade your plan.');
-      }
+      toast.error(showUpgradePrompt ? 'Trial limit reached. Please sign up to continue.' : 'No credits remaining. Please upgrade your plan.');
       return;
     }
 
@@ -78,24 +94,10 @@ export function useEnrichment() {
       return;
     }
 
-    // Best-effort local counter so we don't rely on React re-renders during the loop
-    let creditsLeft = remainingCredits;
-    if (pendingIndices.length > creditsLeft) {
-      toast.warning(
-        `You have ${creditsLeft} credits but ${pendingIndices.length} products to enrich. Some products may not be processed.`
-      );
-    }
-
     setIsEnriching(true);
 
     try {
-      // Process sequentially to avoid rate limiting
       for (const idx of pendingIndices) {
-        if (creditsLeft <= 0) {
-          toast.error('Credit limit reached. Stopping enrichment.');
-          break;
-        }
-
         const product = products[idx];
 
         const creditConsumed = await consumeCredit('enrichment', {
@@ -105,26 +107,39 @@ export function useEnrichment() {
         });
 
         if (!creditConsumed) {
-          toast.error('Failed to consume credit. Stopping enrichment.');
+          // Mark all remaining pending products as failed so the run can finish and allow download.
+          setProducts((prev) =>
+            prev.map((p) =>
+              p.status === 'pending'
+                ? {
+                    ...p,
+                    status: 'failed' as const,
+                    error: 'Not processed: no credits remaining (or credit consumption failed).',
+                  }
+                : p
+            )
+          );
+
+          toast.error('No credits remaining. Stopping enrichment.');
           break;
         }
 
-        creditsLeft -= 1;
-
-        // Update status to processing
+        // Set processing
         setProducts((prev) =>
           prev.map((p, pIdx) => (pIdx === idx ? { ...p, status: 'processing' as const } : p))
         );
 
         try {
           const categoryAttributes = getAttributesForCategory(product.category, attributes);
-          const enrichedData = await enrichProduct(product, categoryAttributes);
+          const enrichedData = await withTimeout(
+            enrichProduct(product, categoryAttributes),
+            60000,
+            `Enrichment for ${product.mfr} ${product.mpn}`
+          );
 
-          // Check fill rate - 70% or more = success
           const filledValues = Object.values(enrichedData).filter((v) => v !== '').length;
           const fillRate = categoryAttributes.length > 0 ? filledValues / categoryAttributes.length : 0;
-          const status =
-            fillRate >= 0.7 ? 'success' : filledValues > 0 ? 'partial' : 'failed';
+          const status = fillRate >= 0.7 ? 'success' : filledValues > 0 ? 'partial' : 'failed';
 
           setProducts((prev) =>
             prev.map((p, pIdx) => (pIdx === idx ? { ...p, status, enrichedData } : p))
@@ -146,19 +161,20 @@ export function useEnrichment() {
 
       toast.success('Enrichment completed');
     } finally {
-      // Always refresh credits to get accurate count from database
       await refreshCredits();
       setIsEnriching(false);
     }
-  }, [isEnriching, products, attributes, consumeCredit, showUpgradePrompt, canMakeRequest, remainingCredits, refreshCredits]);
+  }, [isEnriching, products, attributes, canMakeRequest, consumeCredit, refreshCredits, showUpgradePrompt]);
 
   const resetEnrichment = useCallback(() => {
-    setProducts(prev => prev.map(p => ({
-      ...p,
-      status: 'pending' as const,
-      enrichedData: undefined,
-      error: undefined
-    })));
+    setProducts((prev) =>
+      prev.map((p) => ({
+        ...p,
+        status: 'pending' as const,
+        enrichedData: undefined,
+        error: undefined,
+      }))
+    );
   }, []);
 
   const downloadResults = useCallback(() => {
