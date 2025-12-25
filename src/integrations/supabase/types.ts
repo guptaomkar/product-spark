@@ -121,38 +121,50 @@ export type Database = {
       subscription_plans: {
         Row: {
           created_at: string
+          credits_display_text: string | null
           features: Json | null
           id: string
           is_active: boolean
+          main_feature_text: string | null
           max_devices: number
           monthly_credits: number
           name: string
+          per_mpn_cost: string | null
           price_monthly: number
           price_yearly: number
+          subtitle: string | null
           tier: Database["public"]["Enums"]["plan_tier"]
         }
         Insert: {
           created_at?: string
+          credits_display_text?: string | null
           features?: Json | null
           id?: string
           is_active?: boolean
+          main_feature_text?: string | null
           max_devices?: number
           monthly_credits: number
           name: string
+          per_mpn_cost?: string | null
           price_monthly?: number
           price_yearly?: number
+          subtitle?: string | null
           tier: Database["public"]["Enums"]["plan_tier"]
         }
         Update: {
           created_at?: string
+          credits_display_text?: string | null
           features?: Json | null
           id?: string
           is_active?: boolean
+          main_feature_text?: string | null
           max_devices?: number
           monthly_credits?: number
           name?: string
+          per_mpn_cost?: string | null
           price_monthly?: number
           price_yearly?: number
+          subtitle?: string | null
           tier?: Database["public"]["Enums"]["plan_tier"]
         }
         Relationships: []

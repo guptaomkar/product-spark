@@ -12,14 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -31,7 +23,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Plus, Pencil, Trash2, CreditCard } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, CreditCard, Check } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type PlanTier = Database['public']['Enums']['plan_tier'];
@@ -40,21 +32,26 @@ interface Plan {
   id: string;
   name: string;
   tier: PlanTier;
-  monthly_credits: number;
+  subtitle: string | null;
   price_monthly: number;
-  price_yearly: number;
-  max_devices: number;
+  credits_display_text: string | null;
+  per_mpn_cost: string | null;
+  main_feature_text: string | null;
   features: string[];
   is_active: boolean;
+  monthly_credits: number;
+  price_yearly: number;
+  max_devices: number;
 }
 
 interface PlanFormData {
   name: string;
   tier: PlanTier;
-  monthly_credits: string;
+  subtitle: string;
   price_monthly: string;
-  price_yearly: string;
-  max_devices: string;
+  credits_display_text: string;
+  per_mpn_cost: string;
+  main_feature_text: string;
   features: string;
   is_active: boolean;
 }
@@ -62,10 +59,11 @@ interface PlanFormData {
 const defaultFormData: PlanFormData = {
   name: '',
   tier: 'basic',
-  monthly_credits: '100',
-  price_monthly: '999',
-  price_yearly: '9990',
-  max_devices: '2',
+  subtitle: '',
+  price_monthly: '0',
+  credits_display_text: '',
+  per_mpn_cost: '',
+  main_feature_text: '',
   features: '',
   is_active: true,
 };
@@ -110,10 +108,11 @@ export function PlanManagement() {
       setFormData({
         name: plan.name,
         tier: plan.tier,
-        monthly_credits: plan.monthly_credits.toString(),
+        subtitle: plan.subtitle || '',
         price_monthly: plan.price_monthly.toString(),
-        price_yearly: plan.price_yearly.toString(),
-        max_devices: plan.max_devices.toString(),
+        credits_display_text: plan.credits_display_text || '',
+        per_mpn_cost: plan.per_mpn_cost || '',
+        main_feature_text: plan.main_feature_text || '',
         features: plan.features.join('\n'),
         is_active: plan.is_active,
       });
@@ -132,14 +131,25 @@ export function PlanManagement() {
 
     setIsSubmitting(true);
     try {
+      const features = formData.features.split('\n').filter(f => f.trim());
+      const priceMonthly = parseFloat(formData.price_monthly) || 0;
+      
+      // Extract credits from credits_display_text (e.g., "7,100 MPN included" -> 7100)
+      const creditsMatch = formData.credits_display_text.replace(/,/g, '').match(/(\d+)/);
+      const monthlyCredits = creditsMatch ? parseInt(creditsMatch[1]) : 0;
+      
       const planData = {
         name: formData.name.trim(),
         tier: formData.tier,
-        monthly_credits: parseInt(formData.monthly_credits),
-        price_monthly: parseFloat(formData.price_monthly),
-        price_yearly: parseFloat(formData.price_yearly),
-        max_devices: parseInt(formData.max_devices),
-        features: formData.features.split('\n').filter(f => f.trim()),
+        subtitle: formData.subtitle.trim() || null,
+        price_monthly: priceMonthly,
+        price_yearly: priceMonthly * 12, // Auto-calculate yearly
+        credits_display_text: formData.credits_display_text.trim() || null,
+        per_mpn_cost: formData.per_mpn_cost.trim() || null,
+        main_feature_text: formData.main_feature_text.trim() || null,
+        monthly_credits: monthlyCredits,
+        max_devices: 3, // Default
+        features: features,
         is_active: formData.is_active,
       };
 
@@ -230,68 +240,142 @@ export function PlanManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Tier</TableHead>
-                <TableHead>Credits</TableHead>
-                <TableHead>Monthly Price</TableHead>
-                <TableHead>Yearly Price</TableHead>
-                <TableHead>Max Devices</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {plans.map((plan) => (
-                <TableRow key={plan.id}>
-                  <TableCell className="font-medium">{plan.name}</TableCell>
-                  <TableCell>
+          {/* Pricing Cards Grid - Same structure as public pricing page */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {plans.filter(p => p.tier !== 'trial').map((plan) => (
+              <Card 
+                key={plan.id} 
+                className={`relative ${plan.tier === 'pro' ? 'border-primary shadow-lg shadow-primary/20' : ''}`}
+              >
+                {plan.tier === 'pro' && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                    <Badge className="bg-primary">Most Popular</Badge>
+                  </div>
+                )}
+                
+                <CardHeader className="pb-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <CardTitle className="text-xl">{plan.name}</CardTitle>
+                      {plan.subtitle && (
+                        <CardDescription className="mt-1">{plan.subtitle}</CardDescription>
+                      )}
+                    </div>
                     <Badge className={getTierColor(plan.tier)}>
                       {plan.tier}
                     </Badge>
-                  </TableCell>
-                  <TableCell>{plan.monthly_credits}</TableCell>
-                  <TableCell>₹{plan.price_monthly.toLocaleString()}</TableCell>
-                  <TableCell>₹{plan.price_yearly.toLocaleString()}</TableCell>
-                  <TableCell>{plan.max_devices}</TableCell>
-                  <TableCell>
-                    <Badge variant={plan.is_active ? 'default' : 'secondary'}>
-                      {plan.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenDialog(plan)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedPlan(plan);
-                          setDeleteDialogOpen(true);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  <div>
+                    <span className="text-3xl font-bold text-foreground">
+                      ${plan.price_monthly.toLocaleString()}
+                    </span>
+                  </div>
+                  
+                  {plan.credits_display_text && (
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {plan.credits_display_text}
+                    </p>
+                  )}
+                  
+                  {plan.per_mpn_cost && (
+                    <p className="text-xs text-muted-foreground">
+                      {plan.per_mpn_cost}
+                    </p>
+                  )}
+                  
+                  {plan.main_feature_text && (
+                    <p className="text-sm font-medium text-primary">
+                      {plan.main_feature_text}
+                    </p>
+                  )}
+                  
+                  {plan.features.length > 0 && (
+                    <ul className="space-y-2 pt-2 border-t">
+                      {plan.features.map((feature, i) => (
+                        <li key={i} className="flex items-center gap-2 text-sm">
+                          <Check className="w-4 h-4 text-primary shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  
+                  <div className="flex items-center gap-2 pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleOpenDialog(plan)}
+                    >
+                      <Pencil className="w-4 h-4 mr-2" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedPlan(plan);
+                        setDeleteDialogOpen(true);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Status: {plan.is_active ? 'Active' : 'Inactive'}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Trial Plans Section */}
+          {plans.filter(p => p.tier === 'trial').length > 0 && (
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold mb-4">Trial Plans</h3>
+              <div className="grid gap-4">
+                {plans.filter(p => p.tier === 'trial').map((plan) => (
+                  <Card key={plan.id} className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium">{plan.name}</h4>
+                        <p className="text-sm text-muted-foreground">{plan.subtitle}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenDialog(plan)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedPlan(plan);
+                            setDeleteDialogOpen(true);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedPlan ? 'Edit Plan' : 'Create Plan'}</DialogTitle>
             <DialogDescription>
@@ -300,6 +384,7 @@ export function PlanManagement() {
           </DialogHeader>
           
           <div className="space-y-4 py-4">
+            {/* Field 1: Plan Name */}
             <div className="space-y-2">
               <Label htmlFor="name">Plan Name</Label>
               <Input
@@ -308,10 +393,86 @@ export function PlanManagement() {
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g., Professional"
               />
+              <p className="text-xs text-muted-foreground">Display name like "Professional", "Enterprise"</p>
             </div>
 
+            {/* Field 2: Subtitle */}
             <div className="space-y-2">
-              <Label htmlFor="tier">Tier</Label>
+              <Label htmlFor="subtitle">Subtitle / Tagline</Label>
+              <Input
+                id="subtitle"
+                value={formData.subtitle}
+                onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
+                placeholder="e.g., Best for growing businesses"
+              />
+              <p className="text-xs text-muted-foreground">Short description like "Best for growing businesses"</p>
+            </div>
+
+            {/* Field 3: Price */}
+            <div className="space-y-2">
+              <Label htmlFor="price_monthly">Price ($)</Label>
+              <Input
+                id="price_monthly"
+                type="number"
+                value={formData.price_monthly}
+                onChange={(e) => setFormData({ ...formData, price_monthly: e.target.value })}
+                placeholder="e.g., 500"
+              />
+              <p className="text-xs text-muted-foreground">Price in USD, e.g., "500"</p>
+            </div>
+
+            {/* Field 4: Credits Display Text */}
+            <div className="space-y-2">
+              <Label htmlFor="credits_display_text">Credits Included Text</Label>
+              <Input
+                id="credits_display_text"
+                value={formData.credits_display_text}
+                onChange={(e) => setFormData({ ...formData, credits_display_text: e.target.value })}
+                placeholder="e.g., 7,100 MPN included"
+              />
+              <p className="text-xs text-muted-foreground">Display text like "7,100 MPN included"</p>
+            </div>
+
+            {/* Field 5: Per MPN Cost */}
+            <div className="space-y-2">
+              <Label htmlFor="per_mpn_cost">Per MPN Cost Text</Label>
+              <Input
+                id="per_mpn_cost"
+                value={formData.per_mpn_cost}
+                onChange={(e) => setFormData({ ...formData, per_mpn_cost: e.target.value })}
+                placeholder="e.g., ~$0.070 per MPN"
+              />
+              <p className="text-xs text-muted-foreground">Cost per MPN like "~$0.070 per MPN"</p>
+            </div>
+
+            {/* Field 6: Main Feature Text */}
+            <div className="space-y-2">
+              <Label htmlFor="main_feature_text">Main Feature Text</Label>
+              <Input
+                id="main_feature_text"
+                value={formData.main_feature_text}
+                onChange={(e) => setFormData({ ...formData, main_feature_text: e.target.value })}
+                placeholder="e.g., Up to 7,100 MPN enrichments"
+              />
+              <p className="text-xs text-muted-foreground">Highlighted feature like "Up to 7,100 MPN enrichments"</p>
+            </div>
+
+            {/* Description Points */}
+            <div className="space-y-2">
+              <Label htmlFor="features">Description Points (one per line)</Label>
+              <Textarea
+                id="features"
+                value={formData.features}
+                onChange={(e) => setFormData({ ...formData, features: e.target.value })}
+                placeholder="Enter feature points, one per line"
+                rows={5}
+              />
+              <p className="text-xs text-muted-foreground">Bullet points shown as a checklist</p>
+            </div>
+
+            {/* Tier Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="tier">Plan Tier</Label>
               <Select
                 value={formData.tier}
                 onValueChange={(value: PlanTier) => setFormData({ ...formData, tier: value })}
@@ -328,59 +489,7 @@ export function PlanManagement() {
               </Select>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="monthly_credits">Monthly Credits</Label>
-                <Input
-                  id="monthly_credits"
-                  type="number"
-                  value={formData.monthly_credits}
-                  onChange={(e) => setFormData({ ...formData, monthly_credits: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="max_devices">Max Devices</Label>
-                <Input
-                  id="max_devices"
-                  type="number"
-                  value={formData.max_devices}
-                  onChange={(e) => setFormData({ ...formData, max_devices: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="price_monthly">Monthly Price (₹)</Label>
-                <Input
-                  id="price_monthly"
-                  type="number"
-                  value={formData.price_monthly}
-                  onChange={(e) => setFormData({ ...formData, price_monthly: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="price_yearly">Yearly Price (₹)</Label>
-                <Input
-                  id="price_yearly"
-                  type="number"
-                  value={formData.price_yearly}
-                  onChange={(e) => setFormData({ ...formData, price_yearly: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="features">Features (one per line)</Label>
-              <Textarea
-                id="features"
-                value={formData.features}
-                onChange={(e) => setFormData({ ...formData, features: e.target.value })}
-                placeholder="Enter features, one per line"
-                rows={4}
-              />
-            </div>
-
+            {/* Active Status */}
             <div className="flex items-center gap-2">
               <Switch
                 id="is_active"
