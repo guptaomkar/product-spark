@@ -38,7 +38,7 @@ export function useEnrichment() {
   const [products, setProducts] = useState<Product[]>([]);
   const [attributes, setAttributes] = useState<AttributeDefinition[]>([]);
   const [isEnriching, setIsEnriching] = useState(false);
-  const { canMakeRequest, consumeCredit, showUpgradePrompt, remainingCredits } = useUsageTracking();
+  const { canMakeRequest, consumeCredit, showUpgradePrompt, remainingCredits, refreshCredits } = useUsageTracking();
 
   const stats = useMemo<EnrichmentStats>(() => {
     return {
@@ -82,13 +82,18 @@ export function useEnrichment() {
       const product = products[i];
       if (product.status !== 'pending') continue;
       
-      // Check and consume credit before each product
-      if (!canMakeRequest) {
+      // Check remaining credits before each product
+      const currentCredits = remainingCredits - (i - products.filter((p, idx) => idx < i && p.status !== 'pending').length);
+      if (currentCredits <= 0) {
         toast.error('Credit limit reached. Stopping enrichment.');
         break;
       }
 
-      const creditConsumed = await consumeCredit('enrichment');
+      const creditConsumed = await consumeCredit('enrichment', {
+        mfr: product.mfr,
+        mpn: product.mpn,
+        category: product.category
+      });
       if (!creditConsumed) {
         toast.error('Failed to consume credit. Stopping enrichment.');
         break;
@@ -123,9 +128,11 @@ export function useEnrichment() {
       }
     }
     
+    // Refresh credits to get accurate count from database
+    await refreshCredits();
     setIsEnriching(false);
     toast.success('Enrichment completed');
-  }, [isEnriching, products, attributes, canMakeRequest, consumeCredit, showUpgradePrompt, remainingCredits]);
+  }, [isEnriching, products, attributes, consumeCredit, showUpgradePrompt, remainingCredits, refreshCredits]);
 
   const resetEnrichment = useCallback(() => {
     setProducts(prev => prev.map(p => ({

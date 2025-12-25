@@ -28,6 +28,11 @@ interface UsageLog {
   feature: string;
   credits_used: number;
   created_at: string;
+  request_data: {
+    mfr?: string;
+    mpn?: string;
+    category?: string;
+  } | null;
 }
 
 export default function Dashboard() {
@@ -50,13 +55,16 @@ export default function Dashboard() {
       try {
         const { data, error } = await supabase
           .from('usage_logs')
-          .select('*')
+          .select('id, feature, credits_used, created_at, request_data')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(50);
 
         if (error) throw error;
-        setUsageLogs(data || []);
+        setUsageLogs((data || []).map(log => ({
+          ...log,
+          request_data: log.request_data as UsageLog['request_data']
+        })));
       } catch (error) {
         console.error('Error fetching usage logs:', error);
       } finally {
@@ -97,6 +105,34 @@ export default function Dashboard() {
       case 'download': return '📥';
       default: return '📊';
     }
+  };
+
+  const handleExportLogs = () => {
+    if (usageLogs.length === 0) {
+      toast.error('No usage logs to export');
+      return;
+    }
+
+    const csvContent = [
+      ['Date', 'Feature', 'MFR', 'MPN', 'Category', 'Credits Used'].join(','),
+      ...usageLogs.map(log => [
+        format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
+        log.feature,
+        log.request_data?.mfr || '',
+        log.request_data?.mpn || '',
+        log.request_data?.category || '',
+        log.credits_used
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `usage_logs_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success('Usage logs exported successfully');
   };
 
   return (
@@ -233,18 +269,18 @@ export default function Dashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2">
-                  <History className="w-5 h-5" />
-                  Usage History
-                </CardTitle>
-                <CardDescription>
-                  Recent requests and credit consumption
-                </CardDescription>
-              </div>
-              <Button variant="outline" size="sm">
-                <Download className="w-4 h-4" />
-                Export
-              </Button>
+              <CardTitle className="flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Usage History
+              </CardTitle>
+              <CardDescription>
+                Recent requests and credit consumption
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={handleExportLogs}>
+              <Download className="w-4 h-4" />
+              Export
+            </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -268,9 +304,14 @@ export default function Dashboard() {
                       <div>
                         <p className="font-medium text-foreground capitalize">
                           {log.feature}
+                          {log.request_data?.mpn && (
+                            <span className="text-sm font-normal text-muted-foreground ml-2">
+                              ({log.request_data.mfr} - {log.request_data.mpn})
+                            </span>
+                          )}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(log.created_at), 'MMM dd, yyyy HH:mm')}
+                          {format(new Date(log.created_at), 'MMM dd, yyyy HH:mm:ss')}
                         </p>
                       </div>
                     </div>

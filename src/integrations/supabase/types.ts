@@ -374,6 +374,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_credit: {
+        Args: {
+          p_credits_to_consume?: number
+          p_feature: string
+          p_request_data?: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
