@@ -11,6 +11,10 @@ interface SubscriptionPlan {
   priceMonthly: number;
   priceYearly: number;
   features: string[];
+  subtitle?: string | null;
+  credits_display_text?: string | null;
+  per_mpn_cost?: string | null;
+  main_feature_text?: string | null;
 }
 
 interface UserSubscription {
@@ -48,7 +52,11 @@ export function useSubscription() {
         maxDevices: plan.max_devices,
         priceMonthly: parseFloat(plan.price_monthly as unknown as string),
         priceYearly: parseFloat(plan.price_yearly as unknown as string),
-        features: (plan.features as string[]) || []
+        features: (plan.features as string[]) || [],
+        subtitle: (plan as any).subtitle || null,
+        credits_display_text: (plan as any).credits_display_text || null,
+        per_mpn_cost: (plan as any).per_mpn_cost || null,
+        main_feature_text: (plan as any).main_feature_text || null,
       }));
 
       setPlans(formattedPlans);

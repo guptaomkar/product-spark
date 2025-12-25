@@ -119,7 +119,6 @@ export function PricingCards({ billingCycle }: PricingCardsProps) {
       {paidPlans.map((plan) => {
         const isCurrentPlan = subscription?.plan?.tier === plan.tier;
         const price = billingCycle === 'yearly' ? plan.priceYearly : plan.priceMonthly;
-        const monthlyEquivalent = billingCycle === 'yearly' ? Math.round(price / 12) : price;
         const isPopular = plan.tier === 'pro';
 
         return (
@@ -135,18 +134,33 @@ export function PricingCards({ billingCycle }: PricingCardsProps) {
             
             <CardHeader>
               <CardTitle className="text-xl">{plan.name}</CardTitle>
-              <CardDescription>
-                <span className="text-3xl font-bold text-foreground">₹{monthlyEquivalent}</span>
-                <span className="text-muted-foreground">/month</span>
-                {billingCycle === 'yearly' && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Billed ₹{price} yearly
-                  </p>
-                )}
-              </CardDescription>
+              {plan.subtitle && (
+                <CardDescription className="text-sm">
+                  {plan.subtitle}
+                </CardDescription>
+              )}
+              <div className="mt-2">
+                <span className="text-3xl font-bold text-foreground">${price.toLocaleString()}</span>
+              </div>
+              {plan.credits_display_text && (
+                <p className="text-sm font-medium text-muted-foreground mt-1">
+                  {plan.credits_display_text}
+                </p>
+              )}
+              {plan.per_mpn_cost && (
+                <p className="text-xs text-muted-foreground">
+                  {plan.per_mpn_cost}
+                </p>
+              )}
             </CardHeader>
             
             <CardContent className="space-y-4">
+              {plan.main_feature_text && (
+                <p className="text-sm font-semibold text-primary">
+                  {plan.main_feature_text}
+                </p>
+              )}
+              
               <ul className="space-y-2">
                 {plan.features.map((feature, i) => (
                   <li key={i} className="flex items-center gap-2 text-sm">
