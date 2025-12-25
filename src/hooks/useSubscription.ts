@@ -123,52 +123,41 @@ export function useSubscription() {
     fetchSubscription();
   }, [fetchSubscription]);
 
-  const consumeCredit = useCallback(async (feature: string, creditsToConsume: number = 1): Promise<boolean> => {
+  const consumeCredit = useCallback(async (
+    feature: string, 
+    creditsToConsume: number = 1,
+    requestData?: { mfr?: string; mpn?: string; category?: string }
+  ): Promise<boolean> => {
     if (!user || !subscription) return false;
     if (subscription.creditsRemaining < creditsToConsume) return false;
 
-    // Capture current values before optimistic update
-    const currentCreditsRemaining = subscription.creditsRemaining;
-    const currentCreditsUsed = subscription.creditsUsed;
-    const subscriptionId = subscription.id;
-
-    // Immediately update local state for instant UI feedback
-    setSubscription(prev => prev ? {
-      ...prev,
-      creditsRemaining: prev.creditsRemaining - creditsToConsume,
-      creditsUsed: prev.creditsUsed + creditsToConsume
-    } : null);
-
     try {
-      // Update subscription credits in database using captured values
-      const { error: subError } = await supabase
-        .from('user_subscriptions')
-        .update({
-          credits_remaining: currentCreditsRemaining - creditsToConsume,
-          credits_used: currentCreditsUsed + creditsToConsume
-        })
-        .eq('id', subscriptionId);
+      // Use atomic RPC function to prevent race conditions
+      const { data, error } = await supabase.rpc('consume_credit', {
+        p_user_id: user.id,
+        p_feature: feature,
+        p_credits_to_consume: creditsToConsume,
+        p_request_data: requestData ? requestData : null
+      });
 
-      if (subError) {
-        // Revert local state on error
-        setSubscription(prev => prev ? {
-          ...prev,
-          creditsRemaining: prev.creditsRemaining + creditsToConsume,
-          creditsUsed: prev.creditsUsed - creditsToConsume
-        } : null);
-        throw subError;
+      if (error) {
+        console.error('Error consuming credit:', error);
+        return false;
       }
 
-      // Log usage
-      const { error: logError } = await supabase
-        .from('usage_logs')
-        .insert({
-          user_id: user.id,
-          feature: feature,
-          credits_used: creditsToConsume
-        });
+      const result = data as { success: boolean; credits_remaining?: number; credits_used?: number; error?: string } | null;
+      
+      if (!result?.success) {
+        console.error('Credit consumption failed:', result?.error);
+        return false;
+      }
 
-      if (logError) console.error('Error logging usage:', logError);
+      // Update local state with values from database
+      setSubscription(prev => prev ? {
+        ...prev,
+        creditsRemaining: result.credits_remaining ?? prev.creditsRemaining - creditsToConsume,
+        creditsUsed: result.credits_used ?? prev.creditsUsed + creditsToConsume
+      } : null);
 
       return true;
     } catch (error) {
