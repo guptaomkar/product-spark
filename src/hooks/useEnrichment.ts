@@ -58,7 +58,7 @@ export function useEnrichment() {
 
   const startEnrichment = useCallback(async () => {
     if (isEnriching || products.length === 0) return;
-    
+
     // Check if user can make requests
     if (!canMakeRequest) {
       if (showUpgradePrompt) {
@@ -69,70 +69,88 @@ export function useEnrichment() {
       return;
     }
 
-    // Check if enough credits for all pending products
-    const pendingCount = products.filter(p => p.status === 'pending').length;
-    if (pendingCount > remainingCredits) {
-      toast.warning(`You have ${remainingCredits} credits but ${pendingCount} products to enrich. Some products may not be processed.`);
+    const pendingIndices = products
+      .map((p, idx) => (p.status === 'pending' ? idx : -1))
+      .filter((idx) => idx !== -1);
+
+    if (pendingIndices.length === 0) {
+      toast.info('No pending products to enrich.');
+      return;
     }
-    
+
+    // Best-effort local counter so we don't rely on React re-renders during the loop
+    let creditsLeft = remainingCredits;
+    if (pendingIndices.length > creditsLeft) {
+      toast.warning(
+        `You have ${creditsLeft} credits but ${pendingIndices.length} products to enrich. Some products may not be processed.`
+      );
+    }
+
     setIsEnriching(true);
-    
-    // Process products sequentially to avoid rate limiting
-    for (let i = 0; i < products.length; i++) {
-      const product = products[i];
-      if (product.status !== 'pending') continue;
-      
-      // Check remaining credits before each product
-      const currentCredits = remainingCredits - (i - products.filter((p, idx) => idx < i && p.status !== 'pending').length);
-      if (currentCredits <= 0) {
-        toast.error('Credit limit reached. Stopping enrichment.');
-        break;
+
+    try {
+      // Process sequentially to avoid rate limiting
+      for (const idx of pendingIndices) {
+        if (creditsLeft <= 0) {
+          toast.error('Credit limit reached. Stopping enrichment.');
+          break;
+        }
+
+        const product = products[idx];
+
+        const creditConsumed = await consumeCredit('enrichment', {
+          mfr: product.mfr,
+          mpn: product.mpn,
+          category: product.category,
+        });
+
+        if (!creditConsumed) {
+          toast.error('Failed to consume credit. Stopping enrichment.');
+          break;
+        }
+
+        creditsLeft -= 1;
+
+        // Update status to processing
+        setProducts((prev) =>
+          prev.map((p, pIdx) => (pIdx === idx ? { ...p, status: 'processing' as const } : p))
+        );
+
+        try {
+          const categoryAttributes = getAttributesForCategory(product.category, attributes);
+          const enrichedData = await enrichProduct(product, categoryAttributes);
+
+          // Check fill rate - 70% or more = success
+          const filledValues = Object.values(enrichedData).filter((v) => v !== '').length;
+          const fillRate = categoryAttributes.length > 0 ? filledValues / categoryAttributes.length : 0;
+          const status =
+            fillRate >= 0.7 ? 'success' : filledValues > 0 ? 'partial' : 'failed';
+
+          setProducts((prev) =>
+            prev.map((p, pIdx) => (pIdx === idx ? { ...p, status, enrichedData } : p))
+          );
+        } catch (error) {
+          setProducts((prev) =>
+            prev.map((p, pIdx) =>
+              pIdx === idx
+                ? {
+                    ...p,
+                    status: 'failed' as const,
+                    error: error instanceof Error ? error.message : 'Unknown error',
+                  }
+                : p
+            )
+          );
+        }
       }
 
-      const creditConsumed = await consumeCredit('enrichment', {
-        mfr: product.mfr,
-        mpn: product.mpn,
-        category: product.category
-      });
-      if (!creditConsumed) {
-        toast.error('Failed to consume credit. Stopping enrichment.');
-        break;
-      }
-      
-      // Update status to processing
-      setProducts(prev => prev.map((p, idx) => 
-        idx === i ? { ...p, status: 'processing' as const } : p
-      ));
-      
-      try {
-        const categoryAttributes = getAttributesForCategory(product.category, attributes);
-        const enrichedData = await enrichProduct(product, categoryAttributes);
-        
-        // Check fill rate - 70% or more = success
-        const filledValues = Object.values(enrichedData).filter(v => v !== '').length;
-        const fillRate = categoryAttributes.length > 0 ? filledValues / categoryAttributes.length : 0;
-        const status = fillRate >= 0.7 ? 'success' : 
-                       filledValues > 0 ? 'partial' : 'failed';
-        
-        setProducts(prev => prev.map((p, idx) => 
-          idx === i ? { ...p, status, enrichedData } : p
-        ));
-      } catch (error) {
-        setProducts(prev => prev.map((p, idx) => 
-          idx === i ? { 
-            ...p, 
-            status: 'failed' as const, 
-            error: error instanceof Error ? error.message : 'Unknown error' 
-          } : p
-        ));
-      }
+      toast.success('Enrichment completed');
+    } finally {
+      // Always refresh credits to get accurate count from database
+      await refreshCredits();
+      setIsEnriching(false);
     }
-    
-    // Refresh credits to get accurate count from database
-    await refreshCredits();
-    setIsEnriching(false);
-    toast.success('Enrichment completed');
-  }, [isEnriching, products, attributes, consumeCredit, showUpgradePrompt, remainingCredits, refreshCredits]);
+  }, [isEnriching, products, attributes, consumeCredit, showUpgradePrompt, canMakeRequest, remainingCredits, refreshCredits]);
 
   const resetEnrichment = useCallback(() => {
     setProducts(prev => prev.map(p => ({

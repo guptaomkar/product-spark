@@ -107,25 +107,35 @@ export default function Dashboard() {
     }
   };
 
+  const csvEscape = (value: unknown) => {
+    const s = String(value ?? '');
+    // If it contains quotes, commas, or newlines, wrap and escape quotes for CSV safety
+    if (/[\n\r,\"]/g.test(s)) return `"${s.replace(/"/g, '""')}"`;
+    return s;
+  };
+
   const handleExportLogs = () => {
     if (usageLogs.length === 0) {
       toast.error('No usage logs to export');
       return;
     }
 
-    const csvContent = [
-      ['Date', 'Feature', 'MFR', 'MPN', 'Category', 'Credits Used'].join(','),
-      ...usageLogs.map(log => [
-        format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
-        log.feature,
-        log.request_data?.mfr || '',
-        log.request_data?.mpn || '',
-        log.request_data?.category || '',
-        log.credits_used
-      ].join(','))
-    ].join('\n');
+    const header = ['Date', 'Feature', 'MFR', 'MPN', 'Category', 'Credits Used'];
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const rows = usageLogs.map((log) => [
+      format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
+      log.feature,
+      log.request_data?.mfr || '',
+      log.request_data?.mpn || '',
+      log.request_data?.category || '',
+      log.credits_used,
+    ]);
+
+    const csvContent = [header, ...rows]
+      .map((row) => row.map(csvEscape).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
