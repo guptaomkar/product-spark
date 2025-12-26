@@ -13,6 +13,7 @@ import Dashboard from "./pages/Dashboard";
 import EnrichmentHistory from "./pages/EnrichmentHistory";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUserDetail from "./pages/AdminUserDetail";
+import Settings from "./pages/Settings";
 import { AuthPage } from "./components/auth/AuthPage";
 import NotFound from "./pages/NotFound";
 
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/history" element={<EnrichmentHistory />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/user/:userId" element={<AdminUserDetail />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
