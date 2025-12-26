@@ -203,40 +203,40 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-              <LayoutDashboard className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2 sm:gap-3">
+              <LayoutDashboard className="w-6 h-6 sm:w-8 sm:h-8 text-primary" />
               Dashboard
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Welcome back! Here's your usage overview.
             </p>
           </div>
-          <Button variant="outline" onClick={() => navigate('/settings')}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/settings')} className="self-start sm:self-auto">
             <Settings className="w-4 h-4" />
-            Settings
+            <span className="hidden sm:inline">Settings</span>
           </Button>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
           {/* Current Plan */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Crown className="w-4 h-4" />
-                Current Plan
+            <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardDescription className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Crown className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Current </span>Plan
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <span className="text-2xl font-bold text-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2">
+                <span className="text-lg sm:text-2xl font-bold text-foreground">
                   {plan?.name || 'Trial'}
                 </span>
-                <Badge variant={plan?.tier === 'trial' ? 'secondary' : 'default'}>
+                <Badge variant={plan?.tier === 'trial' ? 'secondary' : 'default'} className="self-start sm:self-auto text-xs">
                   {plan?.tier || 'trial'}
                 </Badge>
               </div>
@@ -245,30 +245,30 @@ export default function Dashboard() {
 
           {/* Credits Remaining */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Zap className="w-4 h-4" />
-                Credits Remaining
+            <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardDescription className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Zap className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Credits </span>Left
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <span className="text-2xl font-bold text-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <span className="text-lg sm:text-2xl font-bold text-foreground">
                 {creditsRemaining}
               </span>
-              <span className="text-muted-foreground"> / {creditsTotal}</span>
+              <span className="text-xs sm:text-base text-muted-foreground"> / {creditsTotal}</span>
             </CardContent>
           </Card>
 
           {/* Credits Used */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" />
-                Credits Used
+            <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardDescription className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <TrendingUp className="w-3 h-3 sm:w-4 sm:h-4" />
+                Used
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <span className="text-2xl font-bold text-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <span className="text-lg sm:text-2xl font-bold text-foreground">
                 {creditsUsed}
               </span>
             </CardContent>
@@ -276,16 +276,16 @@ export default function Dashboard() {
 
           {/* Period End */}
           <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Renews On
+            <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardDescription className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+                <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
+                Renews
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <span className="text-lg font-medium text-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <span className="text-sm sm:text-lg font-medium text-foreground">
                 {subscription?.currentPeriodEnd 
-                  ? format(new Date(subscription.currentPeriodEnd), 'MMM dd, yyyy')
+                  ? format(new Date(subscription.currentPeriodEnd), 'MMM dd')
                   : 'N/A'}
               </span>
             </CardContent>
@@ -293,32 +293,32 @@ export default function Dashboard() {
         </div>
 
         {/* Usage Progress */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Credit Usage</CardTitle>
-            <CardDescription>
+        <Card className="mb-6 sm:mb-8">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">Credit Usage</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               Your credit consumption this billing period
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             <div className="space-y-2">
-              <div className="flex justify-between text-sm">
+              <div className="flex justify-between text-xs sm:text-sm">
                 <span className="text-muted-foreground">Used: {creditsUsed}</span>
                 <span className="text-muted-foreground">Remaining: {creditsRemaining}</span>
               </div>
-              <Progress value={usagePercent} className="h-3" />
+              <Progress value={usagePercent} className="h-2 sm:h-3" />
             </div>
 
             {plan?.tier === 'trial' && (
-              <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
-                <div className="flex items-center justify-between">
+              <div className="mt-4 p-3 sm:p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
-                    <h4 className="font-medium text-foreground">Upgrade for more credits</h4>
-                    <p className="text-sm text-muted-foreground">
+                    <h4 className="font-medium text-foreground text-sm sm:text-base">Upgrade for more credits</h4>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
                       Get up to 2000 credits/month with our plans
                     </p>
                   </div>
-                  <Button onClick={handleUpgrade} variant="glow">
+                  <Button onClick={handleUpgrade} variant="glow" size="sm" className="self-start sm:self-auto">
                     <CreditCard className="w-4 h-4" />
                     Upgrade
                   </Button>
@@ -329,44 +329,43 @@ export default function Dashboard() {
         </Card>
 
         {/* Devices Section */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Smartphone className="w-5 h-5" />
+        <Card className="mb-6 sm:mb-8">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Smartphone className="w-4 h-4 sm:w-5 sm:h-5" />
               Active Devices
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               {devices.length} of {maxDevices} devices active
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             {devicesLoading ? (
               <div className="flex items-center justify-center py-4">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
             ) : devices.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
+              <div className="text-center py-4 text-muted-foreground text-sm">
                 No active devices found
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {devices.map((device) => (
                   <div 
                     key={device.id} 
-                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                    className="flex items-start sm:items-center justify-between p-3 bg-muted/30 rounded-lg gap-3"
                   >
-                    <div className="flex items-center gap-3">
-                      <Smartphone className="w-5 h-5 text-muted-foreground" />
-                      <div>
-                        <p className="font-medium text-foreground">
+                    <div className="flex items-start sm:items-center gap-2 sm:gap-3 min-w-0">
+                      <Smartphone className="w-4 h-4 sm:w-5 sm:h-5 text-muted-foreground flex-shrink-0 mt-0.5 sm:mt-0" />
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground text-sm truncate">
                           {device.deviceName || 'Unknown Device'}
                         </p>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs text-muted-foreground truncate">
                           {device.browser} / {device.os}
-                          {device.ipAddress && ` • IP: ${device.ipAddress}`}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Last active: {format(new Date(device.lastUsedAt), 'MMM dd, yyyy HH:mm')}
+                          Last: {format(new Date(device.lastUsedAt), 'MMM dd, HH:mm')}
                         </p>
                       </div>
                     </div>
@@ -374,7 +373,7 @@ export default function Dashboard() {
                       variant="ghost"
                       size="sm"
                       onClick={() => removeDevice(device.id)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive flex-shrink-0"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -385,7 +384,7 @@ export default function Dashboard() {
 
             {devices.length >= maxDevices && (
               <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-                <p className="text-sm text-amber-600 dark:text-amber-400">
+                <p className="text-xs sm:text-sm text-amber-600 dark:text-amber-400">
                   You've reached your device limit. Remove a device to log in from a new one.
                 </p>
               </div>
@@ -395,64 +394,66 @@ export default function Dashboard() {
 
         {/* Usage History */}
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 sm:p-6">
             <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <History className="w-5 h-5" />
+                  <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                    <History className="w-4 h-4 sm:w-5 sm:h-5" />
                     Usage History
                   </CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-xs sm:text-sm">
                     Recent requests and credit consumption
                   </CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={handleExportLogs}>
+                <Button variant="outline" size="sm" onClick={handleExportLogs} className="self-start sm:self-auto">
                   <Download className="w-4 h-4" />
-                  Export
+                  <span className="hidden sm:inline">Export</span>
                 </Button>
               </div>
               {/* Date Filters */}
-              <div className="flex flex-wrap items-end gap-4 pt-2 border-t">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 pt-2 border-t">
                 <div className="flex items-center gap-2">
                   <Filter className="w-4 h-4 text-muted-foreground" />
-                  <Label className="text-sm text-muted-foreground">Filter by date:</Label>
+                  <Label className="text-xs sm:text-sm text-muted-foreground">Filter:</Label>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="dateFrom" className="text-xs">From</Label>
-                  <Input
-                    id="dateFrom"
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-36 h-8"
-                  />
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="dateFrom" className="text-xs">From</Label>
+                    <Input
+                      id="dateFrom"
+                      type="date"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                      className="w-32 sm:w-36 h-8 text-xs sm:text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="dateTo" className="text-xs">To</Label>
+                    <Input
+                      id="dateTo"
+                      type="date"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                      className="w-32 sm:w-36 h-8 text-xs sm:text-sm"
+                    />
+                  </div>
+                  {(dateFrom || dateTo) && (
+                    <Button variant="ghost" size="sm" onClick={clearDateFilters}>
+                      Clear
+                    </Button>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor="dateTo" className="text-xs">To</Label>
-                  <Input
-                    id="dateTo"
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="w-36 h-8"
-                  />
-                </div>
-                {(dateFrom || dateTo) && (
-                  <Button variant="ghost" size="sm" onClick={clearDateFilters}>
-                    Clear
-                  </Button>
-                )}
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
             {isLoadingLogs ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
             ) : logsToDisplay.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-muted-foreground text-sm">
                 {(dateFrom || dateTo) ? 'No logs found for the selected date range.' : 'No usage history yet.'}
               </div>
             ) : (
@@ -460,26 +461,31 @@ export default function Dashboard() {
                 {logsToDisplay.map((log) => (
                   <div 
                     key={log.id} 
-                    className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                    className="flex items-start sm:items-center justify-between p-3 bg-muted/30 rounded-lg gap-2"
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">{getFeatureIcon(log.feature)}</span>
-                      <div>
-                        <p className="font-medium text-foreground capitalize">
+                    <div className="flex items-start sm:items-center gap-2 sm:gap-3 min-w-0">
+                      <span className="text-lg sm:text-xl flex-shrink-0">{getFeatureIcon(log.feature)}</span>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground capitalize text-sm">
                           {log.feature}
                           {log.request_data?.mpn && (
-                            <span className="text-sm font-normal text-muted-foreground ml-2">
+                            <span className="text-xs font-normal text-muted-foreground ml-1 sm:ml-2 hidden sm:inline">
                               ({log.request_data.mfr} - {log.request_data.mpn})
                             </span>
                           )}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(log.created_at), 'MMM dd, yyyy HH:mm:ss')}
+                        {log.request_data?.mpn && (
+                          <p className="text-xs text-muted-foreground truncate sm:hidden">
+                            {log.request_data.mfr} - {log.request_data.mpn}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {format(new Date(log.created_at), 'MMM dd, HH:mm')}
                         </p>
                       </div>
                     </div>
-                    <Badge variant="secondary">
-                      -{log.credits_used} credit{log.credits_used > 1 ? 's' : ''}
+                    <Badge variant="secondary" className="flex-shrink-0 text-xs">
+                      -{log.credits_used}
                     </Badge>
                   </div>
                 ))}
