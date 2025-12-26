@@ -20,10 +20,7 @@ interface Product {
 
 interface EnrichmentRequest {
   runId: string;
-  concurrency?: number;
 }
-
-const DEFAULT_CONCURRENCY = 5;
 
 function extractResponseText(data: any): string {
   try {
@@ -98,7 +95,7 @@ function parseAttributeValues(responseText: string, attributes: string[]): Recor
 }
 
 // Background processing function - uses run_id from user_enrichment_data
-async function processEnrichmentRun(runId: string, concurrency: number) {
+async function processEnrichmentRun(runId: string) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -361,8 +358,8 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
     let failedCount = run.failed_count || 0;
     let processedCount = run.current_index || 0;
 
-    // Process in batches
-    for (let i = 0; i < pendingItems.length; i += concurrency) {
+    // Strictly sequential processing (accuracy > throughput)
+    for (const item of pendingItems) {
       // Check if run was cancelled
       const { data: currentRun } = await supabase
         .from('user_enrichment_data')
@@ -375,43 +372,73 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
         return;
       }
 
-      const batch = pendingItems.slice(i, i + concurrency);
-      console.log(`[enrich-batch] Processing batch ${Math.floor(i/concurrency) + 1}, ${batch.length} items`);
-      
-      const batchResults = await Promise.all(
-        batch.map(async (item) => {
-          const result = await enrichProduct(item);
-          return { itemId: item.id, ...result };
-        })
-      );
+      // Mark item as processing so UI can show history/progress
+      await supabase
+        .from('enrichment_run_items')
+        .update({ status: 'processing', updated_at: new Date().toISOString() })
+        .eq('id', item.id);
 
-      // Update each item's status in DB
-      for (const result of batchResults) {
-        if (result.success) {
-          await supabase
-            .from('enrichment_run_items')
-            .update({ 
-              status: 'success', 
-              data: result.data,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', result.itemId);
-          successCount++;
-        } else {
-          await supabase
-            .from('enrichment_run_items')
-            .update({ 
-              status: 'failed', 
-              error: result.error,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', result.itemId);
-          failedCount++;
-        }
-        processedCount++;
+      // Deduct credits per executed MPN + write usage history row
+      const { data: creditResult, error: creditError } = await supabase.rpc('consume_credit', {
+        p_user_id: run.user_id,
+        p_feature: 'enrichment',
+        p_credits_to_consume: 1,
+        p_request_data: {
+          run_id: runId,
+          mfr: item.mfr,
+          mpn: item.mpn,
+          category: item.category,
+        },
+      });
+
+      if (creditError || !(creditResult as any)?.success) {
+        const msg =
+          (creditResult as any)?.error || creditError?.message || 'Failed to deduct credits';
+
+        console.error('[enrich-batch] Credit deduction failed:', msg);
+
+        await supabase
+          .from('enrichment_run_items')
+          .update({ status: 'failed', error: msg, updated_at: new Date().toISOString() })
+          .eq('id', item.id);
+
+        await supabase
+          .from('user_enrichment_data')
+          .update({ status: 'failed' })
+          .eq('id', runId);
+
+        return;
       }
 
-      // Update run progress
+      console.log(`[enrich-batch] Executing MPN: ${item.mpn}`);
+
+      const result = await enrichProduct(item);
+
+      if (result.success) {
+        await supabase
+          .from('enrichment_run_items')
+          .update({
+            status: 'success',
+            data: result.data,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', item.id);
+        successCount++;
+      } else {
+        await supabase
+          .from('enrichment_run_items')
+          .update({
+            status: 'failed',
+            error: result.error,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', item.id);
+        failedCount++;
+      }
+
+      processedCount++;
+
+      // Update run progress every item
       await supabase
         .from('user_enrichment_data')
         .update({
@@ -420,8 +447,11 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
           failed_count: failedCount,
         })
         .eq('id', runId);
-      
+
       console.log(`[enrich-batch] Progress: ${processedCount}/${run.total_count}`);
+
+      // Gentle pacing to avoid 429s
+      await new Promise((resolve) => setTimeout(resolve, 400));
     }
 
     // Mark run as completed
@@ -455,7 +485,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { runId, concurrency = DEFAULT_CONCURRENCY } = (await req.json()) as EnrichmentRequest;
+    const { runId } = (await req.json()) as EnrichmentRequest;
 
     if (!runId) {
       return new Response(JSON.stringify({ success: false, error: 'runId is required' }), {
@@ -467,15 +497,18 @@ Deno.serve(async (req) => {
     console.log(`[enrich-batch] Starting run: ${runId}`);
 
     // Use waitUntil for background processing so the function continues after response
-    EdgeRuntime.waitUntil(processEnrichmentRun(runId, concurrency));
+    EdgeRuntime.waitUntil(processEnrichmentRun(runId));
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Run started',
-      runId
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Run started',
+        runId,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
     console.error("[enrich-batch] Error:", error);
     return new Response(
