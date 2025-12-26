@@ -1,4 +1,4 @@
-import { Database, Sparkles, Menu, X, Download, User, LogOut, Settings, Shield } from "lucide-react";
+import { Database, Sparkles, Menu, X, Download, User, LogOut, Settings, Shield, History } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -94,6 +94,10 @@ export function Header() {
                 <DropdownMenuItem onClick={() => navigate("/dashboard")}>
                   <Settings className="w-4 h-4 mr-2" />
                   Dashboard
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/history")}>
+                  <History className="w-4 h-4 mr-2" />
+                  Enrichment History
                 </DropdownMenuItem>
                 {isAdmin && (
                   <DropdownMenuItem onClick={() => navigate("/admin")}>
