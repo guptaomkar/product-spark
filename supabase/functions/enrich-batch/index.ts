@@ -145,10 +145,27 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
 
     const authHeader = btoa(`${username}:${password}`);
 
+    const normalizeCategory = (value: string) =>
+      value
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+
+    const getAllAttributeNames = (): string[] => {
+      const unique = new Set<string>();
+      for (const a of attributes) {
+        if (a?.attributeName) unique.add(a.attributeName);
+      }
+      return Array.from(unique);
+    };
+
     const getAttributesForCategory = (category: string): string[] => {
+      const target = normalizeCategory(category);
+      if (!target) return [];
+
       return attributes
-        .filter(attr => attr.category.toLowerCase() === category.toLowerCase())
-        .map(attr => attr.attributeName);
+        .filter((attr) => normalizeCategory(attr.category) === target)
+        .map((attr) => attr.attributeName);
     };
 
     // Fetch all pending items for this run
@@ -261,10 +278,19 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
 
     const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Record<string, string>; error?: string }> => {
       try {
-        const categoryAttributes = getAttributesForCategory(item.category || '');
+        let categoryAttributes = getAttributesForCategory(item.category || '');
         if (categoryAttributes.length === 0) {
-          console.log(`[enrich-batch] No attributes for category: ${item.category}, MPN: ${item.mpn}`);
-          return { success: true, data: {} };
+          categoryAttributes = getAllAttributeNames();
+          console.log(
+            `[enrich-batch] No attribute mapping for category: "${item.category}". Using fallback set (${categoryAttributes.length} attrs). MPN: ${item.mpn}`
+          );
+        }
+
+        if (categoryAttributes.length === 0) {
+          return {
+            success: false,
+            error: `No attributes configured (category: ${item.category || 'unknown'})`,
+          };
         }
 
         const allResults: Record<string, string> = {};
@@ -316,6 +342,13 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
         const fillRate = totalAttrs > 0 ? (filledCount / totalAttrs) * 100 : 0;
         
         console.log(`[enrich-batch] ${item.mpn} FINAL: ${filledCount}/${totalAttrs} attributes filled (${fillRate.toFixed(1)}%)`);
+
+        if (filledCount === 0) {
+          return {
+            success: false,
+            error: 'Empty enrichment result (0 attributes filled after retries)',
+          };
+        }
 
         return { success: true, data: allResults };
       } catch (error) {

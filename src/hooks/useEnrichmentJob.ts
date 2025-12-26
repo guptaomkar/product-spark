@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import type { AttributeDefinition, EnrichmentStats, FileValidationResult, Product } from '@/types/enrichment';
 import type { Json } from '@/integrations/supabase/types';
 import { exportToExcel } from '@/lib/fileParser';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface EnrichmentRun {
   id: string;
@@ -45,6 +46,7 @@ function mapDbItemToEnrichmentItem(item: any): EnrichmentItem {
 
 export function useEnrichmentJob() {
   const { user } = useAuth();
+  const { subscription, consumeCredit: consumeSubscriptionCredit, refreshSubscription } = useSubscription();
   const [currentRun, setCurrentRun] = useState<EnrichmentRun | null>(null);
   const [runItems, setRunItems] = useState<EnrichmentItem[]>([]);
   const [uploadedProducts, setUploadedProducts] = useState<Product[]>([]);
@@ -234,6 +236,22 @@ export function useEnrichmentJob() {
       return;
     }
 
+    if (!subscription) {
+      toast.error('Subscription is still loading. Please try again in a moment.');
+      return;
+    }
+
+    if (subscription.status !== 'active') {
+      toast.error('No active subscription found');
+      return;
+    }
+
+    const creditsNeeded = uploadedProducts.length;
+    if (subscription.creditsRemaining < creditsNeeded) {
+      toast.error(`Insufficient credits: need ${creditsNeeded}, have ${subscription.creditsRemaining}`);
+      return;
+    }
+
     setIsLoading(true);
     try {
       console.log('[useEnrichmentJob] Starting enrichment with', uploadedProducts.length, 'products');
@@ -282,7 +300,17 @@ export function useEnrichmentJob() {
 
       console.log('[useEnrichmentJob] Items created:', itemsToInsert.length);
 
-      // 3. Set local state
+      // 3. Consume credits (atomic) BEFORE starting background processing
+      const charged = await consumeSubscriptionCredit('enrichment', creditsNeeded);
+      if (!charged) {
+        await supabase.from('enrichment_run_items').delete().eq('run_id', run.id);
+        await supabase.from('user_enrichment_data').delete().eq('id', run.id);
+        toast.error('Failed to deduct credits. Enrichment was not started.');
+        return;
+      }
+      refreshSubscription();
+
+      // 4. Set local state
       setCurrentRun({
         id: run.id,
         fileName: run.file_name,
@@ -307,7 +335,7 @@ export function useEnrichmentJob() {
         }))
       );
 
-      // 4. Trigger background processing
+      // 5. Trigger background processing
       console.log('[useEnrichmentJob] Invoking enrich-batch edge function');
       const { data: invokeData, error: invokeError } = await supabase.functions.invoke('enrich-batch', {
         body: { runId: run.id, concurrency: 5 },
@@ -329,7 +357,7 @@ export function useEnrichmentJob() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, uploadedProducts, attributes]);
+  }, [user, uploadedProducts, attributes, subscription, consumeSubscriptionCredit, refreshSubscription]);
 
   const cancelEnrichment = useCallback(async () => {
     if (!currentRun?.id) return;
