@@ -10,6 +10,7 @@ import Documentation from "./pages/Documentation";
 import About from "./pages/About";
 import Pricing from "./pages/Pricing";
 import Dashboard from "./pages/Dashboard";
+import EnrichmentHistory from "./pages/EnrichmentHistory";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUserDetail from "./pages/AdminUserDetail";
 import { AuthPage } from "./components/auth/AuthPage";
@@ -32,6 +33,7 @@ const App = () => (
               <Route path="/about" element={<About />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/history" element={<EnrichmentHistory />} />
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/user/:userId" element={<AdminUserDetail />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
