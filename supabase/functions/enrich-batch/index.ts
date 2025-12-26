@@ -180,10 +180,11 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
       return;
     }
 
-    const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Record<string, string>; error?: string }> => {
+const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Record<string, string>; error?: string }> => {
       try {
         const categoryAttributes = getAttributesForCategory(item.category || '');
         if (categoryAttributes.length === 0) {
+          console.log(`[enrich-batch] No attributes for category: ${item.category}, MPN: ${item.mpn}`);
           return { success: true, data: {} };
         }
 
@@ -212,7 +213,10 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
         }
         if (currentBatch.length > 0) batches.push(currentBatch);
 
-        for (const batch of batches) {
+        console.log(`[enrich-batch] Processing ${item.mpn}: ${batches.length} batches, ${categoryAttributes.length} total attributes`);
+
+        for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+          const batch = batches[batchIdx];
           const query = `JSON specs for ${item.mfr || ''} ${item.mpn || ''}: ${batch.join(", ")}`;
 
           const payload = {
@@ -223,7 +227,7 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
             render: "html",
           };
 
-          console.log(`[enrich-batch] Fetching ${item.mpn}, batch with ${batch.length} attrs`);
+          console.log(`[enrich-batch] Fetching ${item.mpn}, batch ${batchIdx + 1}/${batches.length} with ${batch.length} attrs`);
 
           const response = await fetch("https://realtime.oxylabs.io/v1/queries", {
             method: "POST",
@@ -237,6 +241,7 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
           if (response.ok) {
             const data = await response.json();
             const responseText = extractResponseText(data);
+            console.log(`[enrich-batch] ${item.mpn} batch ${batchIdx + 1} response length: ${responseText.length}`);
             const batchResults = parseAttributeValues(responseText, batch);
             for (const [key, value] of Object.entries(batchResults)) {
               if (value && value !== "") {
@@ -244,12 +249,20 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
               }
             }
           } else {
-            console.error(`[enrich-batch] API error for ${item.mpn}:`, response.status, await response.text());
+            const errorText = await response.text();
+            console.error(`[enrich-batch] API error for ${item.mpn} batch ${batchIdx + 1}:`, response.status, errorText);
           }
           
-          // Rate limiting delay
-          await new Promise(resolve => setTimeout(resolve, 200));
+          // Rate limiting delay between batches
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
+
+        // Count how many attributes have values
+        const filledCount = Object.values(allResults).filter(v => v && v.trim() !== '').length;
+        const totalAttrs = categoryAttributes.length;
+        const fillRate = totalAttrs > 0 ? (filledCount / totalAttrs) * 100 : 0;
+        
+        console.log(`[enrich-batch] ${item.mpn} result: ${filledCount}/${totalAttrs} attributes filled (${fillRate.toFixed(1)}%)`);
 
         return { success: true, data: allResults };
       } catch (error) {
