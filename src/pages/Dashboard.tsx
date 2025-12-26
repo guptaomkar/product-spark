@@ -4,11 +4,15 @@ import { Header } from '@/components/layout/Header';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useDeviceTracking } from '@/hooks/useDeviceTracking';
+import { useRealtimeCredits } from '@/hooks/useRealtimeCredits';
+import { useDeviceSession } from '@/hooks/useDeviceSession';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { 
   LayoutDashboard, 
   CreditCard, 
@@ -21,9 +25,10 @@ import {
   Loader2,
   Settings,
   Smartphone,
-  Trash2
+  Trash2,
+  Filter
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, isAfter, isBefore, startOfDay, endOfDay, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
 interface UsageLog {
@@ -41,10 +46,17 @@ interface UsageLog {
 export default function Dashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const { subscription, plans, isLoading: subLoading } = useSubscription();
-  const { devices, maxDevices, isLoading: devicesLoading, removeDevice } = useDeviceTracking();
+  const { devices, maxDevices, isLoading: devicesLoading, removeDevice, currentDevice } = useDeviceTracking();
+  const { credits } = useRealtimeCredits();
   const [usageLogs, setUsageLogs] = useState<UsageLog[]>([]);
+  const [filteredLogs, setFilteredLogs] = useState<UsageLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(true);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const navigate = useNavigate();
+
+  // Monitor device session for revocation
+  useDeviceSession(currentDevice?.fingerprint || null);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -81,6 +93,34 @@ export default function Dashboard() {
     }
   }, [user]);
 
+  // Filter logs by date range
+  useEffect(() => {
+    if (!usageLogs.length) {
+      setFilteredLogs([]);
+      return;
+    }
+
+    let filtered = [...usageLogs];
+
+    if (dateFrom) {
+      const fromDate = startOfDay(parseISO(dateFrom));
+      filtered = filtered.filter(log => 
+        isAfter(new Date(log.created_at), fromDate) || 
+        format(new Date(log.created_at), 'yyyy-MM-dd') === dateFrom
+      );
+    }
+
+    if (dateTo) {
+      const toDate = endOfDay(parseISO(dateTo));
+      filtered = filtered.filter(log => 
+        isBefore(new Date(log.created_at), toDate) || 
+        format(new Date(log.created_at), 'yyyy-MM-dd') === dateTo
+      );
+    }
+
+    setFilteredLogs(filtered);
+  }, [usageLogs, dateFrom, dateTo]);
+
   if (authLoading || subLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -92,10 +132,11 @@ export default function Dashboard() {
   if (!user) return null;
 
   const plan = subscription?.plan;
-  const creditsUsed = subscription?.creditsUsed || 0;
+  // Use realtime credits if available, fallback to subscription
+  const creditsUsed = credits?.creditsUsed ?? subscription?.creditsUsed ?? 0;
   const creditsTotal = plan?.monthlyCredits || 10;
-  const creditsRemaining = subscription?.creditsRemaining || 0;
-  const usagePercent = (creditsUsed / creditsTotal) * 100;
+  const creditsRemaining = credits?.creditsRemaining ?? subscription?.creditsRemaining ?? 0;
+  const usagePercent = creditsTotal > 0 ? (creditsUsed / creditsTotal) * 100 : 0;
 
   const handleUpgrade = () => {
     navigate('/pricing');
@@ -119,14 +160,15 @@ export default function Dashboard() {
   };
 
   const handleExportLogs = () => {
-    if (usageLogs.length === 0) {
+    const logsToExport = filteredLogs.length > 0 ? filteredLogs : usageLogs;
+    if (logsToExport.length === 0) {
       toast.error('No usage logs to export');
       return;
     }
 
     const header = ['Date', 'Feature', 'MFR', 'MPN', 'Category', 'Credits Used'];
 
-    const rows = usageLogs.map((log) => [
+    const rows = logsToExport.map((log) => [
       format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
       log.feature,
       log.request_data?.mfr || '',
@@ -148,6 +190,14 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
     toast.success('Usage logs exported successfully');
   };
+
+  const clearDateFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  // Logs to display (filtered or all)
+  const logsToDisplay = (dateFrom || dateTo) ? filteredLogs : usageLogs;
 
   return (
     <div className="min-h-screen bg-background">
@@ -346,20 +396,54 @@ export default function Dashboard() {
         {/* Usage History */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-              <CardTitle className="flex items-center gap-2">
-                <History className="w-5 h-5" />
-                Usage History
-              </CardTitle>
-              <CardDescription>
-                Recent requests and credit consumption
-              </CardDescription>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleExportLogs}>
-              <Download className="w-4 h-4" />
-              Export
-            </Button>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <History className="w-5 h-5" />
+                    Usage History
+                  </CardTitle>
+                  <CardDescription>
+                    Recent requests and credit consumption
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleExportLogs}>
+                  <Download className="w-4 h-4" />
+                  Export
+                </Button>
+              </div>
+              {/* Date Filters */}
+              <div className="flex flex-wrap items-end gap-4 pt-2 border-t">
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <Label className="text-sm text-muted-foreground">Filter by date:</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="dateFrom" className="text-xs">From</Label>
+                  <Input
+                    id="dateFrom"
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-36 h-8"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="dateTo" className="text-xs">To</Label>
+                  <Input
+                    id="dateTo"
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-36 h-8"
+                  />
+                </div>
+                {(dateFrom || dateTo) && (
+                  <Button variant="ghost" size="sm" onClick={clearDateFilters}>
+                    Clear
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -367,13 +451,13 @@ export default function Dashboard() {
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
               </div>
-            ) : usageLogs.length === 0 ? (
+            ) : logsToDisplay.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
-                No usage history yet. Start using the platform to see your activity.
+                {(dateFrom || dateTo) ? 'No logs found for the selected date range.' : 'No usage history yet.'}
               </div>
             ) : (
               <div className="space-y-2">
-                {usageLogs.map((log) => (
+                {logsToDisplay.map((log) => (
                   <div 
                     key={log.id} 
                     className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"

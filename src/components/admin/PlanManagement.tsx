@@ -60,7 +60,7 @@ const defaultFormData: PlanFormData = {
   name: '',
   tier: 'basic',
   subtitle: '',
-  price_monthly: '0',
+  price_monthly: '',
   credits_display_text: '',
   per_mpn_cost: '',
   main_feature_text: '',
