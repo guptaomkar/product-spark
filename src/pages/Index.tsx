@@ -74,61 +74,63 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Main Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-xl grid-cols-4 mx-auto">
-            <TabsTrigger value="enrichment" className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4" />
-              AI Enrichment
-            </TabsTrigger>
-            <TabsTrigger value="training" className="flex items-center gap-2">
-              <GraduationCap className="w-4 h-4" />
-              Training
-            </TabsTrigger>
-            <TabsTrigger value="bulk" className="flex items-center gap-2">
-              <Database className="w-4 h-4" />
-              Bulk Scrape
-            </TabsTrigger>
-            <TabsTrigger value="download" className="flex items-center gap-2">
-              <FileArchive className="w-4 h-4" />
-              Asset Download
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 sm:space-y-6">
+          {/* Mobile: Scrollable tabs, Desktop: Grid */}
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <TabsList className="inline-flex sm:grid sm:w-full sm:max-w-xl sm:grid-cols-4 sm:mx-auto min-w-max sm:min-w-0">
+              <TabsTrigger value="enrichment" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-3 sm:px-4">
+                <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline sm:inline">AI </span>Enrichment
+              </TabsTrigger>
+              <TabsTrigger value="training" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-3 sm:px-4">
+                <GraduationCap className="w-3 h-3 sm:w-4 sm:h-4" />
+                Training
+              </TabsTrigger>
+              <TabsTrigger value="bulk" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-3 sm:px-4">
+                <Database className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline sm:inline">Bulk </span>Scrape
+              </TabsTrigger>
+              <TabsTrigger value="download" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-3 sm:px-4">
+                <FileArchive className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline sm:inline">Asset </span>Download
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
-          {/* AI Enrichment Tab */}
           <TabsContent value="enrichment">
             {!hasData ? (
               <div className="max-w-4xl mx-auto">
                 {/* Hero Section */}
-                <div className="text-center mb-12 animate-fade-in">
-                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    <span className="text-sm font-medium text-primary">AI-Powered Enrichment</span>
+                <div className="text-center mb-8 sm:mb-12 animate-fade-in">
+                  <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-4 sm:mb-6">
+                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-primary" />
+                    <span className="text-xs sm:text-sm font-medium text-primary">AI-Powered Enrichment</span>
                   </div>
                   
-                  <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
+                  <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-3 sm:mb-4 px-2">
                     Product Data <span className="text-gradient">Enrichment</span>
                   </h1>
-                  <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                  <p className="text-sm sm:text-lg text-muted-foreground max-w-2xl mx-auto px-4">
                     Transform your product catalog with intelligent attribute extraction. 
                     Upload your data, define attributes, and let AI do the rest.
                   </p>
                 </div>
                 
                 {/* Features Grid */}
-                <div className="grid md:grid-cols-3 gap-4 mb-8 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6 sm:mb-8 animate-slide-up" style={{ animationDelay: '0.1s' }}>
                   {[
                     { icon: FileSpreadsheet, title: 'Multi-Sheet Input', desc: 'Products + attribute definitions' },
                     { icon: Sparkles, title: 'AI Intelligence', desc: 'Automated specification lookup' },
                     { icon: Download, title: 'Clean Export', desc: 'Excel-ready structured output' },
                   ].map((feature, i) => (
-                    <div key={i} className="p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                        <feature.icon className="w-5 h-5 text-primary" />
+                    <div key={i} className="p-4 sm:p-6 rounded-xl bg-card border border-border hover:border-primary/30 transition-colors">
+                      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3 sm:mb-4">
+                        <feature.icon className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
                       </div>
-                      <h3 className="font-semibold text-foreground mb-1">{feature.title}</h3>
-                      <p className="text-sm text-muted-foreground">{feature.desc}</p>
+                      <h3 className="font-semibold text-foreground mb-1 text-sm sm:text-base">{feature.title}</h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground">{feature.desc}</p>
                     </div>
                   ))}
                 </div>
@@ -137,39 +139,41 @@ const Index = () => {
                 <FileUpload onFileProcessed={loadData} />
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Action Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-4 animate-fade-in">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
                   <div>
-                    <h2 className="text-xl font-semibold text-foreground">Enrichment Dashboard</h2>
-                    <p className="text-sm text-muted-foreground">
+                    <h2 className="text-lg sm:text-xl font-semibold text-foreground">Enrichment Dashboard</h2>
+                    <p className="text-xs sm:text-sm text-muted-foreground">
                       {products.length} products • {attributes.length} attribute mappings
                       {currentRun && (
-                        <Badge variant="outline" className="ml-2">
+                        <Badge variant="outline" className="ml-2 text-xs">
                           {currentRun.status === 'processing' ? 'Processing...' : currentRun.status}
                         </Badge>
                       )}
                     </p>
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {!jobComplete && !isEnriching && (
                       <Button
                         onClick={startEnrichment}
                         disabled={isLoading || stats.pending === 0}
                         variant="glow"
-                        size="lg"
+                        size="sm"
+                        className="flex-1 sm:flex-none sm:size-lg"
                       >
                         {isLoading ? (
                           <>
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            Starting...
+                            <span className="hidden sm:inline">Starting...</span>
                           </>
                         ) : (
                           <>
                             <Play className="w-4 h-4" />
-                            Start Enrichment
-                            <ArrowRight className="w-4 h-4" />
+                            <span className="hidden sm:inline">Start Enrichment</span>
+                            <span className="sm:hidden">Start</span>
+                            <ArrowRight className="w-4 h-4 hidden sm:block" />
                           </>
                         )}
                       </Button>
@@ -179,11 +183,14 @@ const Index = () => {
                       <>
                         <Button
                           variant="secondary"
-                          size="lg"
+                          size="sm"
                           disabled
+                          className="flex-1 sm:flex-none"
                         >
                           <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing ({stats.success + stats.failed}/{stats.total})
+                          <span className="text-xs sm:text-sm">
+                            {stats.success + stats.failed}/{stats.total}
+                          </span>
                         </Button>
                         <Button
                           onClick={cancelEnrichment}
@@ -191,24 +198,25 @@ const Index = () => {
                           size="sm"
                         >
                           <StopCircle className="w-4 h-4" />
-                          Cancel
+                          <span className="hidden sm:inline">Cancel</span>
                         </Button>
                       </>
                     )}
                     
                     {jobComplete && (
-                      <Button onClick={downloadResults} variant="success" size="lg">
+                      <Button onClick={downloadResults} variant="success" size="sm" className="flex-1 sm:flex-none">
                         <Download className="w-4 h-4" />
-                        Download Results
+                        <span className="hidden sm:inline">Download Results</span>
+                        <span className="sm:hidden">Download</span>
                       </Button>
                     )}
                     
-                    <Button onClick={resetEnrichment} variant="outline" disabled={isEnriching}>
+                    <Button onClick={resetEnrichment} variant="outline" size="sm" disabled={isEnriching}>
                       <RotateCcw className="w-4 h-4" />
-                      Reset
+                      <span className="hidden sm:inline">Reset</span>
                     </Button>
                     
-                    <Button onClick={clearData} variant="ghost" disabled={isEnriching}>
+                    <Button onClick={clearData} variant="ghost" size="sm" disabled={isEnriching}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
