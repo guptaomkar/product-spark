@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -30,95 +30,76 @@ interface EnrichmentItem {
   error?: string;
 }
 
+function mapDbItemToEnrichmentItem(item: any): EnrichmentItem {
+  return {
+    id: item.id,
+    productId: item.product_id,
+    mfr: item.mfr || '',
+    mpn: item.mpn || '',
+    category: item.category || '',
+    status: item.status,
+    data: (item.data as Record<string, string> | null) ?? undefined,
+    error: item.error || undefined,
+  };
+}
+
 export function useEnrichmentJob() {
   const { user } = useAuth();
   const [currentRun, setCurrentRun] = useState<EnrichmentRun | null>(null);
   const [runItems, setRunItems] = useState<EnrichmentItem[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [uploadedProducts, setUploadedProducts] = useState<Product[]>([]);
+  const [displayProducts, setDisplayProducts] = useState<Product[]>([]);
   const [attributes, setAttributes] = useState<AttributeDefinition[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  const lastRunStatusRef = useRef<string | null>(null);
+
   // Compute stats from run
-  const stats: EnrichmentStats = currentRun ? {
-    total: currentRun.totalCount,
-    pending: currentRun.totalCount - currentRun.currentIndex,
-    processing: currentRun.status === 'processing' ? Math.min(5, currentRun.totalCount - currentRun.currentIndex) : 0,
-    success: currentRun.successCount,
-    partial: 0,
-    failed: currentRun.failedCount,
-  } : {
-    total: products.length,
-    pending: products.length,
-    processing: 0,
-    success: 0,
-    partial: 0,
-    failed: 0,
-  };
+  const stats: EnrichmentStats = useMemo(() => {
+    return currentRun
+      ? {
+          total: currentRun.totalCount,
+          pending: Math.max(0, currentRun.totalCount - currentRun.currentIndex),
+          processing:
+            currentRun.status === 'processing'
+              ? Math.min(5, Math.max(0, currentRun.totalCount - currentRun.currentIndex))
+              : 0,
+          success: currentRun.successCount,
+          partial: 0,
+          failed: currentRun.failedCount,
+        }
+      : {
+          total: uploadedProducts.length,
+          pending: uploadedProducts.length,
+          processing: 0,
+          success: 0,
+          partial: 0,
+          failed: 0,
+        };
+  }, [currentRun, uploadedProducts.length]);
 
   const isEnriching = currentRun?.status === 'processing' || currentRun?.status === 'pending';
   const isComplete = currentRun?.status === 'completed';
 
-  // Load active run on mount
-  useEffect(() => {
-    if (!user) return;
-
-    const loadActiveRun = async () => {
-      // Check for any pending/processing run
-      const { data, error } = await supabase
-        .from('user_enrichment_data')
-        .select('*')
-        .eq('user_id', user.id)
-        .in('status', ['pending', 'processing'])
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (data && !error) {
-        const attributesData = data.attributes as unknown as AttributeDefinition[];
-        setCurrentRun({
-          id: data.id,
-          fileName: data.file_name,
-          status: data.status as EnrichmentRun['status'],
-          attributes: attributesData,
-          currentIndex: (data as any).current_index || 0,
-          totalCount: (data as any).total_count || data.products_count,
-          successCount: (data as any).success_count || 0,
-          failedCount: (data as any).failed_count || 0,
-          createdAt: data.created_at,
-          completedAt: (data as any).completed_at,
-        });
-        setAttributes(attributesData);
-
-        // Load items for this run
-        await loadRunItems(data.id);
-      }
-    };
-
-    loadActiveRun();
-  }, [user]);
-
-  const loadRunItems = async (runId: string) => {
+  const loadRunItems = useCallback(async (runId: string) => {
     const { data: items, error } = await supabase
       .from('enrichment_run_items')
       .select('*')
       .eq('run_id', runId)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: true })
+      .limit(200);
 
-    if (items && !error) {
-      const mappedItems = items.map(item => ({
-        id: item.id,
-        productId: item.product_id,
-        mfr: item.mfr || '',
-        mpn: item.mpn || '',
-        category: item.category || '',
-        status: item.status,
-        data: item.data as Record<string, string> | undefined,
-        error: item.error || undefined,
-      }));
+    if (error) {
+      console.error('[useEnrichmentJob] Error loading run items:', error);
+      return;
+    }
+
+    if (items) {
+      const mappedItems = items.map(mapDbItemToEnrichmentItem);
       setRunItems(mappedItems);
-      
+
       // Convert to products format for display
-      const productsList = mappedItems.map(item => ({
+      const productsList = mappedItems.map((item) => ({
         id: item.productId,
         mfr: item.mfr,
         mpn: item.mpn,
@@ -127,91 +108,116 @@ export function useEnrichmentJob() {
         enrichedData: item.data,
         error: item.error,
       }));
-      setProducts(productsList);
+      setDisplayProducts(productsList);
     }
-  };
+  }, []);
 
-  // Subscribe to run updates for real-time progress
+  // Load latest run on mount (active first; otherwise most recent completed/failed)
+  useEffect(() => {
+    if (!user) return;
+
+    const loadLatestRun = async () => {
+      const { data: activeRun, error: activeError } = await supabase
+        .from('user_enrichment_data')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('status', ['pending', 'processing'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const runRow = activeRun
+        ? activeRun
+        : (
+            await supabase
+              .from('user_enrichment_data')
+              .select('*')
+              .eq('user_id', user.id)
+              .in('status', ['completed', 'failed'])
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle()
+          ).data;
+
+      if (!runRow || activeError) {
+        return;
+      }
+
+      const attributesData = runRow.attributes as unknown as AttributeDefinition[];
+      setCurrentRun({
+        id: runRow.id,
+        fileName: runRow.file_name,
+        status: runRow.status as EnrichmentRun['status'],
+        attributes: attributesData,
+        currentIndex: (runRow as any).current_index || 0,
+        totalCount: (runRow as any).total_count || runRow.products_count,
+        successCount: (runRow as any).success_count || 0,
+        failedCount: (runRow as any).failed_count || 0,
+        createdAt: runRow.created_at,
+        completedAt: (runRow as any).completed_at,
+      });
+      lastRunStatusRef.current = runRow.status;
+      setAttributes(attributesData);
+      await loadRunItems(runRow.id);
+    };
+
+    loadLatestRun();
+  }, [user, loadRunItems]);
+
+  // Poll progress (avoids Realtime WebSocket dependency)
   useEffect(() => {
     if (!currentRun?.id) return;
 
-    const channel = supabase
-      .channel(`run-${currentRun.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'user_enrichment_data',
-          filter: `id=eq.${currentRun.id}`,
-        },
-        (payload) => {
-          const data = payload.new as any;
-          setCurrentRun(prev => prev ? {
-            ...prev,
-            status: data.status,
-            currentIndex: data.current_index || 0,
-            successCount: data.success_count || 0,
-            failedCount: data.failed_count || 0,
-            completedAt: data.completed_at,
-          } : null);
+    const runId = currentRun.id;
+    let isCancelled = false;
 
-          if (data.status === 'completed') {
-            toast.success('Enrichment completed!');
-            // Reload items to get final results
-            loadRunItems(currentRun.id);
-          } else if (data.status === 'failed') {
-            toast.error('Enrichment failed');
-          }
-        }
-      )
-      .subscribe();
+    const poll = async () => {
+      const { data, error } = await supabase
+        .from('user_enrichment_data')
+        .select('status,current_index,success_count,failed_count,completed_at,total_count')
+        .eq('id', runId)
+        .maybeSingle();
 
-    // Also subscribe to item updates for progress
-    const itemsChannel = supabase
-      .channel(`run-items-${currentRun.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'enrichment_run_items',
-        },
-        (payload) => {
-          const data = payload.new as any;
-          // Only update if it's for our run
-          if (data.run_id === currentRun.id) {
-            setRunItems(prev => prev.map(item => 
-              item.id === data.id ? {
-                ...item,
-                status: data.status,
-                data: data.data,
-                error: data.error,
-              } : item
-            ));
-            
-            // Also update products
-            setProducts(prev => prev.map(product => 
-              product.id === data.product_id ? {
-                ...product,
-                status: data.status as Product['status'],
-                enrichedData: data.data,
-                error: data.error,
-              } : product
-            ));
-          }
-        }
-      )
-      .subscribe();
+      if (isCancelled || error || !data) return;
+
+      const nextStatus = data.status as EnrichmentRun['status'];
+      const prevStatus = lastRunStatusRef.current;
+      if (prevStatus !== nextStatus) {
+        lastRunStatusRef.current = nextStatus;
+        if (nextStatus === 'completed') toast.success('Enrichment completed!');
+        if (nextStatus === 'failed') toast.error('Enrichment failed');
+      }
+
+      setCurrentRun((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: nextStatus,
+              currentIndex: (data as any).current_index || 0,
+              totalCount: (data as any).total_count || prev.totalCount,
+              successCount: (data as any).success_count || 0,
+              failedCount: (data as any).failed_count || 0,
+              completedAt: (data as any).completed_at ?? prev.completedAt,
+            }
+          : prev
+      );
+
+      // Keep a small preview refreshed; fetch all on download
+      await loadRunItems(runId);
+    };
+
+    poll();
+    const interval = window.setInterval(poll, 3000);
 
     return () => {
-      supabase.removeChannel(channel);
-      supabase.removeChannel(itemsChannel);
+      isCancelled = true;
+      window.clearInterval(interval);
     };
-  }, [currentRun?.id]);
+  }, [currentRun?.id, loadRunItems]);
 
   const loadData = useCallback((result: FileValidationResult) => {
-    setProducts(result.products);
+    setUploadedProducts(result.products);
+    setDisplayProducts(result.products);
     setAttributes(result.attributes);
     setCurrentRun(null);
     setRunItems([]);
@@ -222,16 +228,16 @@ export function useEnrichmentJob() {
       toast.error('Please log in to start enrichment');
       return;
     }
-    
-    if (products.length === 0) {
+
+    if (uploadedProducts.length === 0) {
       toast.error('Please upload data first');
       return;
     }
 
     setIsLoading(true);
     try {
-      console.log('[useEnrichmentJob] Starting enrichment with', products.length, 'products');
-      
+      console.log('[useEnrichmentJob] Starting enrichment with', uploadedProducts.length, 'products');
+
       // 1. Create run in user_enrichment_data
       const { data: run, error: runError } = await supabase
         .from('user_enrichment_data')
@@ -239,10 +245,10 @@ export function useEnrichmentJob() {
           user_id: user.id,
           file_name: `enrichment_${new Date().toISOString().split('T')[0]}`,
           status: 'pending',
-          products_count: products.length,
+          products_count: uploadedProducts.length,
           attributes: JSON.parse(JSON.stringify(attributes)) as Json,
           results: [],
-          total_count: products.length,
+          total_count: uploadedProducts.length,
           current_index: 0,
           success_count: 0,
           failed_count: 0,
@@ -258,7 +264,7 @@ export function useEnrichmentJob() {
       console.log('[useEnrichmentJob] Run created:', run.id);
 
       // 2. Insert all products as run items
-      const itemsToInsert = products.map(product => ({
+      const itemsToInsert = uploadedProducts.map((product) => ({
         run_id: run.id,
         product_id: product.id,
         mfr: product.mfr,
@@ -267,9 +273,7 @@ export function useEnrichmentJob() {
         status: 'pending',
       }));
 
-      const { error: itemsError } = await supabase
-        .from('enrichment_run_items')
-        .insert(itemsToInsert);
+      const { error: itemsError } = await supabase.from('enrichment_run_items').insert(itemsToInsert);
 
       if (itemsError) {
         console.error('[useEnrichmentJob] Failed to create items:', itemsError);
@@ -285,20 +289,23 @@ export function useEnrichmentJob() {
         status: 'pending',
         attributes: attributes,
         currentIndex: 0,
-        totalCount: products.length,
+        totalCount: uploadedProducts.length,
         successCount: 0,
         failedCount: 0,
         createdAt: run.created_at,
       });
+      lastRunStatusRef.current = 'pending';
 
-      setRunItems(itemsToInsert.map((item, idx) => ({
-        id: `temp-${idx}`,
-        productId: item.product_id,
-        mfr: item.mfr,
-        mpn: item.mpn,
-        category: item.category,
-        status: 'pending',
-      })));
+      setRunItems(
+        itemsToInsert.slice(0, 200).map((item, idx) => ({
+          id: `temp-${idx}`,
+          productId: item.product_id,
+          mfr: item.mfr,
+          mpn: item.mpn,
+          category: item.category,
+          status: 'pending',
+        }))
+      );
 
       // 4. Trigger background processing
       console.log('[useEnrichmentJob] Invoking enrich-batch edge function');
@@ -310,13 +317,10 @@ export function useEnrichmentJob() {
         console.error('[useEnrichmentJob] Error invoking enrich-batch:', invokeError);
         toast.error('Error starting background processing: ' + invokeError.message);
         // Mark run as failed
-        await supabase
-          .from('user_enrichment_data')
-          .update({ status: 'failed' })
-          .eq('id', run.id);
+        await supabase.from('user_enrichment_data').update({ status: 'failed' }).eq('id', run.id);
         return;
       }
-      
+
       console.log('[useEnrichmentJob] Edge function invoked successfully:', invokeData);
       toast.success('Enrichment started! Processing continues even if you close this tab.');
     } catch (error) {
@@ -325,18 +329,15 @@ export function useEnrichmentJob() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, products, attributes]);
+  }, [user, uploadedProducts, attributes]);
 
   const cancelEnrichment = useCallback(async () => {
     if (!currentRun?.id) return;
 
     try {
-      await supabase
-        .from('user_enrichment_data')
-        .update({ status: 'cancelled' })
-        .eq('id', currentRun.id);
+      await supabase.from('user_enrichment_data').update({ status: 'cancelled' }).eq('id', currentRun.id);
 
-      setCurrentRun(prev => prev ? { ...prev, status: 'cancelled' } : null);
+      setCurrentRun((prev) => (prev ? { ...prev, status: 'cancelled' } : null));
       toast.info('Enrichment cancelled');
     } catch (error) {
       console.error('Error cancelling run:', error);
@@ -344,14 +345,43 @@ export function useEnrichmentJob() {
     }
   }, [currentRun?.id]);
 
-  const downloadResults = useCallback(() => {
-    if (runItems.length === 0) {
+  const downloadResults = useCallback(async () => {
+    const runId = currentRun?.id;
+
+    let items: EnrichmentItem[] = runItems;
+
+    if (runId) {
+      const all: any[] = [];
+      const pageSize = 1000;
+
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from('enrichment_run_items')
+          .select('*')
+          .eq('run_id', runId)
+          .order('created_at', { ascending: true })
+          .range(from, from + pageSize - 1);
+
+        if (error) {
+          console.error('[useEnrichmentJob] Error fetching items for download:', error);
+          toast.error('Failed to download results');
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+      }
+
+      items = all.map(mapDbItemToEnrichmentItem);
+    }
+
+    if (items.length === 0) {
       toast.error('No results to download');
       return;
     }
 
-    // Build enriched products from run items
-    const enrichedProducts = runItems.map(item => ({
+    const enrichedProducts = items.map((item) => ({
       id: item.productId,
       mfr: item.mfr,
       mpn: item.mpn,
@@ -368,10 +398,11 @@ export function useEnrichmentJob() {
     link.download = `enriched_data_${new Date().toISOString().split('T')[0]}.xlsx`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [runItems, attributes]);
+  }, [currentRun?.id, runItems, attributes]);
 
   const clearData = useCallback(() => {
-    setProducts([]);
+    setUploadedProducts([]);
+    setDisplayProducts([]);
     setAttributes([]);
     setCurrentRun(null);
     setRunItems([]);
@@ -379,27 +410,14 @@ export function useEnrichmentJob() {
 
   const resetEnrichment = useCallback(async () => {
     if (currentRun?.id) {
-      await supabase
-        .from('user_enrichment_data')
-        .delete()
-        .eq('id', currentRun.id);
+      await supabase.from('user_enrichment_data').delete().eq('id', currentRun.id);
     }
     setCurrentRun(null);
     setRunItems([]);
   }, [currentRun?.id]);
 
-  // Get products with current enrichment status
-  const enrichedProducts = runItems.length > 0 
-    ? runItems.map(item => ({
-        id: item.productId,
-        mfr: item.mfr,
-        mpn: item.mpn,
-        category: item.category,
-        status: item.status as Product['status'],
-        enrichedData: item.data,
-        error: item.error,
-      }))
-    : products;
+  // Get products to render in the table
+  const enrichedProducts = currentRun ? displayProducts : uploadedProducts;
 
   return {
     products: enrichedProducts,
@@ -417,3 +435,4 @@ export function useEnrichmentJob() {
     currentRun,
   };
 }
+
