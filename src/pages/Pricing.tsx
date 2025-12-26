@@ -4,78 +4,29 @@ import {
   Sparkles, 
   Zap,
   ArrowRight,
-  HelpCircle
+  HelpCircle,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Pricing = () => {
-  const plans = [
-    {
-      name: 'Starter',
-      price: 99,
-      mpn: '1,400',
-      perMpn: '0.071',
-      description: 'Perfect for small catalogs and testing',
-      features: [
-        'Up to 1,400 MPN enrichments',
-        'AI-powered attribute lookup',
-        'Excel export',
-        'Email support',
-        '7-day data retention',
-      ],
-      popular: false,
-    },
-    {
-      name: 'Professional',
-      price: 500,
-      mpn: '7,100',
-      perMpn: '0.070',
-      description: 'Best for growing businesses',
-      features: [
-        'Up to 7,100 MPN enrichments',
-        'All Starter features',
-        'Asset extraction (images & PDFs)',
-        'Bulk processing',
-        'Priority support',
-        '30-day data retention',
-      ],
-      popular: true,
-    },
-    {
-      name: 'Business',
-      price: 1000,
-      mpn: '14,000',
-      perMpn: '0.071',
-      description: 'For established enterprises',
-      features: [
-        'Up to 14,000 MPN enrichments',
-        'All Professional features',
-        'Custom selector training',
-        'API access',
-        'Dedicated support',
-        '90-day data retention',
-      ],
-      popular: false,
-    },
-    {
-      name: 'Enterprise',
-      price: 5000,
-      mpn: '71,400',
-      perMpn: '0.070',
-      description: 'Unlimited scale and support',
-      features: [
-        'Up to 71,400 MPN enrichments',
-        'All Business features',
-        'White-glove onboarding',
-        'Custom integrations',
-        'SLA guarantee',
-        'Unlimited data retention',
-        'Dedicated account manager',
-      ],
-      popular: false,
-    },
-  ];
+  const { plans, isLoading } = useSubscription();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Filter out trial plans for public display
+  const paidPlans = plans.filter(p => p.tier !== 'trial');
+
+  const handleGetStarted = (planTier: string) => {
+    if (!user) {
+      navigate('/auth');
+    } else {
+      navigate('/dashboard');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -99,61 +50,88 @@ const Pricing = () => {
         </div>
 
         {/* Pricing Grid */}
-        <div className="max-w-6xl mx-auto grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
-          {plans.map((plan, i) => (
-            <div 
-              key={i}
-              className={`relative p-6 rounded-2xl border ${
-                plan.popular 
-                  ? 'bg-gradient-to-b from-primary/10 to-card border-primary/30 ring-2 ring-primary/20' 
-                  : 'bg-card border-border'
-              } flex flex-col`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
-                    Most Popular
-                  </span>
+        {isLoading ? (
+          <div className="flex justify-center items-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        ) : (
+          <div className={`max-w-6xl mx-auto grid gap-6 mb-16 ${
+            paidPlans.length === 1 ? 'md:grid-cols-1 max-w-md' :
+            paidPlans.length === 2 ? 'md:grid-cols-2 max-w-2xl' :
+            paidPlans.length === 3 ? 'md:grid-cols-3 max-w-4xl' :
+            'md:grid-cols-2 lg:grid-cols-4'
+          }`}>
+            {paidPlans.map((plan) => {
+              const isPopular = plan.tier === 'pro';
+              
+              return (
+                <div 
+                  key={plan.id}
+                  className={`relative p-6 rounded-2xl border ${
+                    isPopular 
+                      ? 'bg-gradient-to-b from-primary/10 to-card border-primary/30 ring-2 ring-primary/20' 
+                      : 'bg-card border-border'
+                  } flex flex-col`}
+                >
+                  {isPopular && (
+                    <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                      <span className="px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+                        Most Popular
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className="mb-6">
+                    <h3 className="text-lg font-semibold text-foreground mb-1">{plan.name}</h3>
+                    {plan.subtitle && (
+                      <p className="text-sm text-muted-foreground">{plan.subtitle}</p>
+                    )}
+                  </div>
+                  
+                  <div className="mb-6">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-4xl font-bold text-foreground">${plan.priceMonthly.toLocaleString()}</span>
+                    </div>
+                    {plan.credits_display_text && (
+                      <div className="mt-2">
+                        <span className="text-sm font-medium text-primary">{plan.credits_display_text}</span>
+                      </div>
+                    )}
+                    {plan.per_mpn_cost && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {plan.per_mpn_cost}
+                      </p>
+                    )}
+                  </div>
+
+                  {plan.main_feature_text && (
+                    <p className="text-sm font-semibold text-primary mb-4">
+                      {plan.main_feature_text}
+                    </p>
+                  )}
+                  
+                  <ul className="space-y-3 mb-6 flex-1">
+                    {plan.features.map((feature, j) => (
+                      <li key={j} className="flex items-start gap-2 text-sm text-muted-foreground">
+                        <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  
+                  <Button 
+                    variant={isPopular ? 'glow' : 'outline'} 
+                    className="w-full"
+                    onClick={() => handleGetStarted(plan.tier)}
+                  >
+                    Get Started
+                    <ArrowRight className="w-4 h-4" />
+                  </Button>
                 </div>
-              )}
-              
-              <div className="mb-6">
-                <h3 className="text-lg font-semibold text-foreground mb-1">{plan.name}</h3>
-                <p className="text-sm text-muted-foreground">{plan.description}</p>
-              </div>
-              
-              <div className="mb-6">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-bold text-foreground">${plan.price}</span>
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-sm font-medium text-primary">{plan.mpn} MPN</span>
-                  <span className="text-xs text-muted-foreground">included</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  ~${plan.perMpn} per MPN
-                </p>
-              </div>
-              
-              <ul className="space-y-3 mb-6 flex-1">
-                {plan.features.map((feature, j) => (
-                  <li key={j} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <Check className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              
-              <Button 
-                variant={plan.popular ? 'glow' : 'outline'} 
-                className="w-full"
-              >
-                Get Started
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Usage Info */}
         <section className="max-w-4xl mx-auto mb-16">
@@ -211,7 +189,7 @@ const Pricing = () => {
                 a: 'Credits remain valid as long as your account is active. There is no monthly expiration on purchased credits.'
               },
               {
-                q: 'What if I need more than 71,400 MPNs?',
+                q: 'What if I need more MPNs?',
                 a: 'Contact our sales team for custom enterprise pricing. We offer volume discounts for large-scale enrichment projects.'
               },
               {
