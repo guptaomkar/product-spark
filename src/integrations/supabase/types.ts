@@ -231,6 +231,7 @@ export type Database = {
         Row: {
           created_at: string
           credits_display_text: string | null
+          display_order: number | null
           features: Json | null
           id: string
           is_active: boolean
@@ -247,6 +248,7 @@ export type Database = {
         Insert: {
           created_at?: string
           credits_display_text?: string | null
+          display_order?: number | null
           features?: Json | null
           id?: string
           is_active?: boolean
@@ -263,6 +265,7 @@ export type Database = {
         Update: {
           created_at?: string
           credits_display_text?: string | null
+          display_order?: number | null
           features?: Json | null
           id?: string
           is_active?: boolean
