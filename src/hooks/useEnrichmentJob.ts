@@ -129,17 +129,24 @@ export function useEnrichmentJob() {
   }, []);
 
   const startEnrichment = useCallback(async () => {
-    if (!user || products.length === 0) {
-      toast.error('Please upload data and log in to start enrichment');
+    if (!user) {
+      toast.error('Please log in to start enrichment');
+      return;
+    }
+    
+    if (products.length === 0) {
+      toast.error('Please upload data first');
       return;
     }
 
     setIsLoading(true);
     try {
+      console.log('[useEnrichmentJob] Starting enrichment with', products.length, 'products');
+      
       // Create job in database
       const { data: job, error: jobError } = await supabase
         .from('enrichment_jobs')
-        .insert([{
+        .insert({
           user_id: user.id,
           status: 'pending',
           products: JSON.parse(JSON.stringify(products)) as Json,
@@ -149,13 +156,20 @@ export function useEnrichmentJob() {
           success_count: 0,
           failed_count: 0,
           results: {},
-        }])
+        })
         .select()
         .single();
 
-      if (jobError || !job) {
-        throw new Error(jobError?.message || 'Failed to create job');
+      if (jobError) {
+        console.error('[useEnrichmentJob] Failed to create job:', jobError);
+        throw new Error(jobError.message || 'Failed to create job');
       }
+      
+      if (!job) {
+        throw new Error('Failed to create job - no data returned');
+      }
+
+      console.log('[useEnrichmentJob] Job created:', job.id);
 
       setCurrentJob({
         id: job.id,
@@ -171,19 +185,27 @@ export function useEnrichmentJob() {
       });
 
       // Trigger background processing
-      const { error: invokeError } = await supabase.functions.invoke('enrich-batch', {
+      console.log('[useEnrichmentJob] Invoking enrich-batch edge function');
+      const { data: invokeData, error: invokeError } = await supabase.functions.invoke('enrich-batch', {
         body: { jobId: job.id, concurrency: 5 },
       });
 
       if (invokeError) {
-        console.error('Error invoking enrich-batch:', invokeError);
-        // Job will continue in background even if invoke fails
+        console.error('[useEnrichmentJob] Error invoking enrich-batch:', invokeError);
+        toast.error('Error starting background processing: ' + invokeError.message);
+        // Mark job as failed
+        await supabase
+          .from('enrichment_jobs')
+          .update({ status: 'failed', error: 'Failed to start processing: ' + invokeError.message })
+          .eq('id', job.id);
+        return;
       }
-
+      
+      console.log('[useEnrichmentJob] Edge function invoked successfully:', invokeData);
       toast.success('Enrichment started! You can leave this page and come back later.');
     } catch (error) {
-      console.error('Error starting enrichment:', error);
-      toast.error('Failed to start enrichment');
+      console.error('[useEnrichmentJob] Error starting enrichment:', error);
+      toast.error('Failed to start enrichment: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsLoading(false);
     }
