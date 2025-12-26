@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      enrichment_jobs: {
+        Row: {
+          attributes: Json
+          created_at: string
+          current_index: number
+          error: string | null
+          failed_count: number
+          id: string
+          products: Json
+          results: Json
+          status: string
+          success_count: number
+          total_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attributes?: Json
+          created_at?: string
+          current_index?: number
+          error?: string | null
+          failed_count?: number
+          id?: string
+          products?: Json
+          results?: Json
+          status?: string
+          success_count?: number
+          total_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attributes?: Json
+          created_at?: string
+          current_index?: number
+          error?: string | null
+          failed_count?: number
+          id?: string
+          products?: Json
+          results?: Json
+          status?: string
+          success_count?: number
+          total_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       manufacturer_trainings: {
         Row: {
           created_at: string
@@ -240,6 +288,7 @@ export type Database = {
           is_active: boolean
           last_used_at: string
           os: string | null
+          revoked_at: string | null
           user_id: string
         }
         Insert: {
@@ -252,6 +301,7 @@ export type Database = {
           is_active?: boolean
           last_used_at?: string
           os?: string | null
+          revoked_at?: string | null
           user_id: string
         }
         Update: {
@@ -264,6 +314,7 @@ export type Database = {
           is_active?: boolean
           last_used_at?: string
           os?: string | null
+          revoked_at?: string | null
           user_id?: string
         }
         Relationships: []
