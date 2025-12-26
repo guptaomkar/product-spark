@@ -23,7 +23,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Plus, Pencil, Trash2, CreditCard, Check } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, CreditCard, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 
 type PlanTier = Database['public']['Enums']['plan_tier'];
@@ -42,6 +42,7 @@ interface Plan {
   monthly_credits: number;
   price_yearly: number;
   max_devices: number;
+  display_order: number;
 }
 
 interface PlanFormData {
@@ -82,13 +83,14 @@ export function PlanManagement() {
       const { data, error } = await supabase
         .from('subscription_plans')
         .select('*')
-        .order('price_monthly', { ascending: true });
+        .order('display_order', { ascending: true });
 
       if (error) throw error;
       
       setPlans((data || []).map(p => ({
         ...p,
         features: Array.isArray(p.features) ? p.features as string[] : [],
+        display_order: p.display_order ?? 0,
       })));
     } catch (error) {
       console.error('Error fetching plans:', error);
@@ -123,6 +125,14 @@ export function PlanManagement() {
     setDialogOpen(true);
   };
 
+  // Auto-determine tier based on price for new plans
+  const determineTierFromPrice = (price: number): PlanTier => {
+    if (price === 0) return 'trial';
+    if (price <= 100) return 'basic';
+    if (price <= 500) return 'pro';
+    return 'enterprise';
+  };
+
   const handleSubmit = async () => {
     if (!formData.name.trim()) {
       toast.error('Plan name is required');
@@ -138,17 +148,23 @@ export function PlanManagement() {
       const creditsMatch = formData.credits_display_text.replace(/,/g, '').match(/(\d+)/);
       const monthlyCredits = creditsMatch ? parseInt(creditsMatch[1]) : 0;
       
+      // For new plans, auto-determine tier; for editing, use selected tier
+      const tier = selectedPlan ? formData.tier : determineTierFromPrice(priceMonthly);
+      
+      // Calculate next display_order for new plans
+      const maxOrder = plans.reduce((max, p) => Math.max(max, p.display_order), 0);
+      
       const planData = {
         name: formData.name.trim(),
-        tier: formData.tier,
+        tier: tier,
         subtitle: formData.subtitle.trim() || null,
         price_monthly: priceMonthly,
-        price_yearly: priceMonthly * 12, // Auto-calculate yearly
+        price_yearly: priceMonthly * 12,
         credits_display_text: formData.credits_display_text.trim() || null,
         per_mpn_cost: formData.per_mpn_cost.trim() || null,
         main_feature_text: formData.main_feature_text.trim() || null,
         monthly_credits: monthlyCredits,
-        max_devices: 3, // Default
+        max_devices: 3,
         features: features,
         is_active: formData.is_active,
       };
@@ -164,7 +180,7 @@ export function PlanManagement() {
       } else {
         const { error } = await supabase
           .from('subscription_plans')
-          .insert([planData]);
+          .insert([{ ...planData, display_order: maxOrder + 1 }]);
 
         if (error) throw error;
         toast.success('Plan created successfully');
@@ -203,6 +219,39 @@ export function PlanManagement() {
     }
   };
 
+  const handleMoveOrder = async (planId: string, direction: 'up' | 'down') => {
+    const nonTrialPlans = plans.filter(p => p.tier !== 'trial');
+    const currentIndex = nonTrialPlans.findIndex(p => p.id === planId);
+    
+    if (currentIndex === -1) return;
+    if (direction === 'up' && currentIndex === 0) return;
+    if (direction === 'down' && currentIndex === nonTrialPlans.length - 1) return;
+
+    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    const currentPlan = nonTrialPlans[currentIndex];
+    const swapPlan = nonTrialPlans[swapIndex];
+
+    try {
+      // Swap display_order values
+      await Promise.all([
+        supabase
+          .from('subscription_plans')
+          .update({ display_order: swapPlan.display_order })
+          .eq('id', currentPlan.id),
+        supabase
+          .from('subscription_plans')
+          .update({ display_order: currentPlan.display_order })
+          .eq('id', swapPlan.id),
+      ]);
+
+      toast.success('Plan order updated');
+      fetchPlans();
+    } catch (error) {
+      console.error('Error updating order:', error);
+      toast.error('Failed to update order');
+    }
+  };
+
   const getTierColor = (tier: string) => {
     switch (tier) {
       case 'enterprise': return 'bg-purple-500/20 text-purple-400';
@@ -221,6 +270,9 @@ export function PlanManagement() {
     );
   }
 
+  const nonTrialPlans = plans.filter(p => p.tier !== 'trial');
+  const trialPlans = plans.filter(p => p.tier === 'trial');
+
   return (
     <>
       <Card>
@@ -231,7 +283,7 @@ export function PlanManagement() {
                 <CreditCard className="w-5 h-5 text-primary" />
                 Subscription Plans
               </CardTitle>
-              <CardDescription>Manage pricing and plan features</CardDescription>
+              <CardDescription>Manage pricing and plan features. Use arrows to reorder.</CardDescription>
             </div>
             <Button onClick={() => handleOpenDialog()}>
               <Plus className="w-4 h-4 mr-2" />
@@ -240,9 +292,9 @@ export function PlanManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Pricing Cards Grid - Same structure as public pricing page */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {plans.filter(p => p.tier !== 'trial').map((plan) => (
+          {/* Pricing Cards Grid */}
+          <div className={`grid gap-6 ${nonTrialPlans.length === 1 ? 'md:grid-cols-1 max-w-md' : nonTrialPlans.length === 2 ? 'md:grid-cols-2' : nonTrialPlans.length === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-4'}`}>
+            {nonTrialPlans.map((plan, index) => (
               <Card 
                 key={plan.id} 
                 className={`relative ${plan.tier === 'pro' ? 'border-primary shadow-lg shadow-primary/20' : ''}`}
@@ -303,7 +355,28 @@ export function PlanManagement() {
                     </ul>
                   )}
                   
-                  <div className="flex items-center gap-2 pt-4 border-t">
+                  {/* Reorder Buttons */}
+                  <div className="flex items-center justify-center gap-2 pt-2 border-t">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleMoveOrder(plan.id, 'up')}
+                      disabled={index === 0}
+                    >
+                      <ChevronUp className="w-4 h-4" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground">Order: {index + 1}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleMoveOrder(plan.id, 'down')}
+                      disabled={index === nonTrialPlans.length - 1}
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 pt-2 border-t">
                     <Button
                       variant="outline"
                       size="sm"
@@ -334,11 +407,11 @@ export function PlanManagement() {
           </div>
 
           {/* Trial Plans Section */}
-          {plans.filter(p => p.tier === 'trial').length > 0 && (
+          {trialPlans.length > 0 && (
             <div className="mt-8">
               <h3 className="text-lg font-semibold mb-4">Trial Plans</h3>
               <div className="grid gap-4">
-                {plans.filter(p => p.tier === 'trial').map((plan) => (
+                {trialPlans.map((plan) => (
                   <Card key={plan.id} className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
@@ -379,7 +452,7 @@ export function PlanManagement() {
           <DialogHeader>
             <DialogTitle>{selectedPlan ? 'Edit Plan' : 'Create Plan'}</DialogTitle>
             <DialogDescription>
-              {selectedPlan ? 'Update plan details' : 'Add a new subscription plan'}
+              {selectedPlan ? 'Update plan details' : 'Add a new subscription plan. Tier will be auto-assigned based on price.'}
             </DialogDescription>
           </DialogHeader>
           
@@ -418,7 +491,9 @@ export function PlanManagement() {
                 onChange={(e) => setFormData({ ...formData, price_monthly: e.target.value })}
                 placeholder="e.g., 500"
               />
-              <p className="text-xs text-muted-foreground">Price in USD, e.g., "500"</p>
+              <p className="text-xs text-muted-foreground">
+                Price in USD. {!selectedPlan && `Tier auto-assigned: $0=Trial, ≤$100=Basic, ≤$500=Pro, >$500=Enterprise`}
+              </p>
             </div>
 
             {/* Field 4: Credits Display Text */}
@@ -470,24 +545,27 @@ export function PlanManagement() {
               <p className="text-xs text-muted-foreground">Bullet points shown as a checklist</p>
             </div>
 
-            {/* Tier Selection */}
-            <div className="space-y-2">
-              <Label htmlFor="tier">Plan Tier</Label>
-              <Select
-                value={formData.tier}
-                onValueChange={(value: PlanTier) => setFormData({ ...formData, tier: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="trial">Trial</SelectItem>
-                  <SelectItem value="basic">Basic</SelectItem>
-                  <SelectItem value="pro">Pro</SelectItem>
-                  <SelectItem value="enterprise">Enterprise</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Tier Selection - Only show when editing */}
+            {selectedPlan && (
+              <div className="space-y-2">
+                <Label htmlFor="tier">Plan Tier</Label>
+                <Select
+                  value={formData.tier}
+                  onValueChange={(value: PlanTier) => setFormData({ ...formData, tier: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="trial">Trial</SelectItem>
+                    <SelectItem value="basic">Basic</SelectItem>
+                    <SelectItem value="pro">Pro</SelectItem>
+                    <SelectItem value="enterprise">Enterprise</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Change the tier classification for this plan</p>
+              </div>
+            )}
 
             {/* Active Status */}
             <div className="flex items-center gap-2">
