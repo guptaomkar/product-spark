@@ -19,11 +19,11 @@ interface Product {
 }
 
 interface EnrichmentRequest {
-  jobId: string;
+  runId: string;
   concurrency?: number;
 }
 
-const CONCURRENCY = 5;
+const DEFAULT_CONCURRENCY = 5;
 
 function extractResponseText(data: any): string {
   try {
@@ -97,42 +97,39 @@ function parseAttributeValues(responseText: string, attributes: string[]): Recor
   return result;
 }
 
-// Background processing function
-async function processEnrichmentJob(jobId: string, concurrency: number) {
+// Background processing function - uses run_id from user_enrichment_data
+async function processEnrichmentRun(runId: string, concurrency: number) {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    console.log(`[enrich-batch] Processing job: ${jobId}`);
+    console.log(`[enrich-batch] Processing run: ${runId}`);
 
-    const { data: job, error: jobError } = await supabase
-      .from('enrichment_jobs')
+    // Get run details
+    const { data: run, error: runError } = await supabase
+      .from('user_enrichment_data')
       .select('*')
-      .eq('id', jobId)
+      .eq('id', runId)
       .single();
 
-    if (jobError || !job) {
-      console.error('[enrich-batch] Job not found:', jobError);
+    if (runError || !run) {
+      console.error('[enrich-batch] Run not found:', runError);
       return;
     }
 
-    if (job.status === 'completed' || job.status === 'cancelled') {
-      console.log('[enrich-batch] Job already finished:', job.status);
+    if (run.status === 'completed' || run.status === 'cancelled') {
+      console.log('[enrich-batch] Run already finished:', run.status);
       return;
     }
 
+    // Mark as processing
     await supabase
-      .from('enrichment_jobs')
+      .from('user_enrichment_data')
       .update({ status: 'processing' })
-      .eq('id', jobId);
+      .eq('id', runId);
 
-    const products = job.products as Product[];
-    const attributes = job.attributes as { category: string; attributeName: string }[];
-    const results = (job.results || {}) as Record<string, any>;
-    let currentIndex = job.current_index || 0;
-    let successCount = job.success_count || 0;
-    let failedCount = job.failed_count || 0;
+    const attributes = run.attributes as { category: string; attributeName: string }[];
 
     const username = Deno.env.get("OXYLABS_USERNAME");
     const password = Deno.env.get("OXYLABS_PASSWORD");
@@ -140,9 +137,9 @@ async function processEnrichmentJob(jobId: string, concurrency: number) {
     if (!username || !password) {
       console.error('[enrich-batch] Oxylabs credentials not configured');
       await supabase
-        .from('enrichment_jobs')
-        .update({ status: 'failed', error: 'Oxylabs credentials not configured' })
-        .eq('id', jobId);
+        .from('user_enrichment_data')
+        .update({ status: 'failed' })
+        .eq('id', runId);
       return;
     }
 
@@ -154,9 +151,38 @@ async function processEnrichmentJob(jobId: string, concurrency: number) {
         .map(attr => attr.attributeName);
     };
 
-    const enrichProduct = async (product: Product): Promise<{ success: boolean; data?: Record<string, string>; error?: string }> => {
+    // Fetch all pending items for this run
+    const { data: pendingItems, error: itemsError } = await supabase
+      .from('enrichment_run_items')
+      .select('*')
+      .eq('run_id', runId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true });
+
+    if (itemsError) {
+      console.error('[enrich-batch] Error fetching items:', itemsError);
+      await supabase
+        .from('user_enrichment_data')
+        .update({ status: 'failed' })
+        .eq('id', runId);
+      return;
+    }
+
+    console.log(`[enrich-batch] Processing ${pendingItems?.length || 0} pending items`);
+
+    if (!pendingItems || pendingItems.length === 0) {
+      // All items processed, mark run as complete
+      await supabase
+        .from('user_enrichment_data')
+        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .eq('id', runId);
+      console.log(`[enrich-batch] Run already complete: ${runId}`);
+      return;
+    }
+
+    const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Record<string, string>; error?: string }> => {
       try {
-        const categoryAttributes = getAttributesForCategory(product.category);
+        const categoryAttributes = getAttributesForCategory(item.category || '');
         if (categoryAttributes.length === 0) {
           return { success: true, data: {} };
         }
@@ -166,7 +192,7 @@ async function processEnrichmentJob(jobId: string, concurrency: number) {
           allResults[attr] = "";
         }
 
-        const baseQueryLength = `JSON specs for ${product.mfr} ${product.mpn}: `.length;
+        const baseQueryLength = `JSON specs for ${item.mfr || ''} ${item.mpn || ''}: `.length;
         const maxAttrChars = 350 - baseQueryLength;
         
         const batches: string[][] = [];
@@ -187,7 +213,7 @@ async function processEnrichmentJob(jobId: string, concurrency: number) {
         if (currentBatch.length > 0) batches.push(currentBatch);
 
         for (const batch of batches) {
-          const query = `JSON specs for ${product.mfr} ${product.mpn}: ${batch.join(", ")}`;
+          const query = `JSON specs for ${item.mfr || ''} ${item.mpn || ''}: ${batch.join(", ")}`;
 
           const payload = {
             source: "google_ai_mode",
@@ -197,7 +223,7 @@ async function processEnrichmentJob(jobId: string, concurrency: number) {
             render: "html",
           };
 
-          console.log(`[enrich-batch] Fetching product ${product.mpn}, batch with ${batch.length} attrs`);
+          console.log(`[enrich-batch] Fetching ${item.mpn}, batch with ${batch.length} attrs`);
 
           const response = await fetch("https://realtime.oxylabs.io/v1/queries", {
             method: "POST",
@@ -218,90 +244,109 @@ async function processEnrichmentJob(jobId: string, concurrency: number) {
               }
             }
           } else {
-            console.error(`[enrich-batch] API error for ${product.mpn}:`, response.status, await response.text());
+            console.error(`[enrich-batch] API error for ${item.mpn}:`, response.status, await response.text());
           }
           
+          // Rate limiting delay
           await new Promise(resolve => setTimeout(resolve, 200));
         }
 
         return { success: true, data: allResults };
       } catch (error) {
-        console.error(`[enrich-batch] Error enriching ${product.mpn}:`, error);
+        console.error(`[enrich-batch] Error enriching ${item.mpn}:`, error);
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
       }
     };
 
-    const pendingProducts = products.slice(currentIndex);
-    console.log(`[enrich-batch] Processing ${pendingProducts.length} pending products`);
-    
-    for (let i = 0; i < pendingProducts.length; i += concurrency) {
-      const { data: currentJob } = await supabase
-        .from('enrichment_jobs')
+    let successCount = run.success_count || 0;
+    let failedCount = run.failed_count || 0;
+    let processedCount = run.current_index || 0;
+
+    // Process in batches
+    for (let i = 0; i < pendingItems.length; i += concurrency) {
+      // Check if run was cancelled
+      const { data: currentRun } = await supabase
+        .from('user_enrichment_data')
         .select('status')
-        .eq('id', jobId)
+        .eq('id', runId)
         .single();
 
-      if (currentJob?.status === 'cancelled') {
-        console.log('[enrich-batch] Job cancelled');
+      if (currentRun?.status === 'cancelled') {
+        console.log('[enrich-batch] Run cancelled');
         return;
       }
 
-      const batch = pendingProducts.slice(i, i + concurrency);
-      console.log(`[enrich-batch] Processing batch ${Math.floor(i/concurrency) + 1}, ${batch.length} products`);
+      const batch = pendingItems.slice(i, i + concurrency);
+      console.log(`[enrich-batch] Processing batch ${Math.floor(i/concurrency) + 1}, ${batch.length} items`);
       
       const batchResults = await Promise.all(
-        batch.map(async (product) => {
-          const result = await enrichProduct(product);
-          return { productId: product.id, ...result };
+        batch.map(async (item) => {
+          const result = await enrichProduct(item);
+          return { itemId: item.id, ...result };
         })
       );
 
+      // Update each item's status in DB
       for (const result of batchResults) {
         if (result.success) {
-          results[result.productId] = { status: 'success', data: result.data };
+          await supabase
+            .from('enrichment_run_items')
+            .update({ 
+              status: 'success', 
+              data: result.data,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', result.itemId);
           successCount++;
         } else {
-          results[result.productId] = { status: 'failed', error: result.error };
+          await supabase
+            .from('enrichment_run_items')
+            .update({ 
+              status: 'failed', 
+              error: result.error,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', result.itemId);
           failedCount++;
         }
+        processedCount++;
       }
 
-      currentIndex += batch.length;
-
+      // Update run progress
       await supabase
-        .from('enrichment_jobs')
+        .from('user_enrichment_data')
         .update({
-          current_index: currentIndex,
+          current_index: processedCount,
           success_count: successCount,
           failed_count: failedCount,
-          results: results,
         })
-        .eq('id', jobId);
+        .eq('id', runId);
       
-      console.log(`[enrich-batch] Progress: ${currentIndex}/${products.length}`);
+      console.log(`[enrich-batch] Progress: ${processedCount}/${run.total_count}`);
     }
 
+    // Mark run as completed
     await supabase
-      .from('enrichment_jobs')
+      .from('user_enrichment_data')
       .update({ 
         status: 'completed',
-        current_index: products.length,
+        current_index: processedCount,
         success_count: successCount,
         failed_count: failedCount,
-        results: results,
+        completed_at: new Date().toISOString()
       })
-      .eq('id', jobId);
+      .eq('id', runId);
 
-    console.log(`[enrich-batch] Job completed: ${jobId}, success: ${successCount}, failed: ${failedCount}`);
+    console.log(`[enrich-batch] Run completed: ${runId}, success: ${successCount}, failed: ${failedCount}`);
   } catch (error) {
     console.error("[enrich-batch] Fatal error:", error);
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     await supabase
-      .from('enrichment_jobs')
-      .update({ status: 'failed', error: error instanceof Error ? error.message : 'Unknown error' })
-      .eq('id', jobId);
+      .from('user_enrichment_data')
+      .update({ status: 'failed' })
+      .eq('id', runId);
   }
 }
 
@@ -311,24 +356,24 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { jobId, concurrency = CONCURRENCY } = (await req.json()) as EnrichmentRequest;
+    const { runId, concurrency = DEFAULT_CONCURRENCY } = (await req.json()) as EnrichmentRequest;
 
-    if (!jobId) {
-      return new Response(JSON.stringify({ success: false, error: 'jobId is required' }), {
+    if (!runId) {
+      return new Response(JSON.stringify({ success: false, error: 'runId is required' }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[enrich-batch] Starting job: ${jobId}`);
+    console.log(`[enrich-batch] Starting run: ${runId}`);
 
     // Use waitUntil for background processing so the function continues after response
-    EdgeRuntime.waitUntil(processEnrichmentJob(jobId, concurrency));
+    EdgeRuntime.waitUntil(processEnrichmentRun(runId, concurrency));
 
     return new Response(JSON.stringify({ 
       success: true, 
-      message: 'Job started',
-      jobId
+      message: 'Run started',
+      runId
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

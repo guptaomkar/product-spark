@@ -24,6 +24,7 @@ export type Database = {
           id: string
           products: Json
           results: Json
+          run_id: string | null
           status: string
           success_count: number
           total_count: number
@@ -39,6 +40,7 @@ export type Database = {
           id?: string
           products?: Json
           results?: Json
+          run_id?: string | null
           status?: string
           success_count?: number
           total_count?: number
@@ -54,13 +56,72 @@ export type Database = {
           id?: string
           products?: Json
           results?: Json
+          run_id?: string | null
           status?: string
           success_count?: number
           total_count?: number
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "enrichment_jobs_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "user_enrichment_data"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enrichment_run_items: {
+        Row: {
+          category: string | null
+          created_at: string
+          data: Json | null
+          error: string | null
+          id: string
+          mfr: string | null
+          mpn: string | null
+          product_id: string
+          run_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          data?: Json | null
+          error?: string | null
+          id?: string
+          mfr?: string | null
+          mpn?: string | null
+          product_id: string
+          run_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          data?: Json | null
+          error?: string | null
+          id?: string
+          mfr?: string | null
+          mpn?: string | null
+          product_id?: string
+          run_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrichment_run_items_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "user_enrichment_data"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       manufacturer_trainings: {
         Row: {
@@ -322,34 +383,52 @@ export type Database = {
       user_enrichment_data: {
         Row: {
           attributes: Json
+          completed_at: string | null
           created_at: string
+          current_index: number
+          failed_count: number
           file_name: string
           id: string
           products_count: number
           results: Json
+          started_at: string
           status: string
+          success_count: number
+          total_count: number
           updated_at: string
           user_id: string
         }
         Insert: {
           attributes?: Json
+          completed_at?: string | null
           created_at?: string
+          current_index?: number
+          failed_count?: number
           file_name: string
           id?: string
           products_count?: number
           results?: Json
+          started_at?: string
           status?: string
+          success_count?: number
+          total_count?: number
           updated_at?: string
           user_id: string
         }
         Update: {
           attributes?: Json
+          completed_at?: string | null
           created_at?: string
+          current_index?: number
+          failed_count?: number
           file_name?: string
           id?: string
           products_count?: number
           results?: Json
+          started_at?: string
           status?: string
+          success_count?: number
+          total_count?: number
           updated_at?: string
           user_id?: string
         }
