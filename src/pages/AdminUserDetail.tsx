@@ -218,11 +218,14 @@ export default function AdminUserDetail() {
     try {
       const { error } = await supabase
         .from('user_devices')
-        .update({ is_active: false })
+        .update({ 
+          is_active: false,
+          revoked_at: new Date().toISOString()
+        })
         .eq('id', deviceId);
 
       if (error) throw error;
-      toast.success('Device deactivated successfully');
+      toast.success('Device deactivated and session revoked');
       fetchUserData();
     } catch (error) {
       console.error('Error removing device:', error);

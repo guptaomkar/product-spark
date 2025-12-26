@@ -4,7 +4,7 @@ import { FileUpload } from '@/components/upload/FileUpload';
 import { ProductTable } from '@/components/enrichment/ProductTable';
 import { StatsBar } from '@/components/enrichment/StatsBar';
 import { AttributePreview } from '@/components/enrichment/AttributePreview';
-import { useEnrichment } from '@/hooks/useEnrichment';
+import { useEnrichmentJob } from '@/hooks/useEnrichmentJob';
 import { TrainingModePanel } from '@/components/training/TrainingModePanel';
 import { SavedTrainingsList } from '@/components/training/SavedTrainingsList';
 import { BulkScrapePanel } from '@/components/training/BulkScrapePanel';
@@ -13,6 +13,7 @@ import { ManufacturerTraining } from '@/types/training';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AssetDownloadPanel } from '@/components/training/AssetDownloadPanel';
+import { Badge } from '@/components/ui/badge';
 import { 
   Play, 
   Download, 
@@ -23,7 +24,9 @@ import {
   ArrowRight,
   GraduationCap,
   Database,
-  FileArchive
+  FileArchive,
+  StopCircle,
+  Loader2
 } from 'lucide-react';
 
 const Index = () => {
@@ -32,12 +35,16 @@ const Index = () => {
     attributes,
     stats,
     isEnriching,
+    isComplete,
+    isLoading,
     loadData,
     startEnrichment,
+    cancelEnrichment,
     resetEnrichment,
     downloadResults,
     clearData,
-  } = useEnrichment();
+    currentJob,
+  } = useEnrichmentJob();
 
   const { trainings, fetchTrainings } = useTraining();
   const [activeTab, setActiveTab] = useState('enrichment');
@@ -61,7 +68,7 @@ const Index = () => {
   }, [fetchTrainings]);
 
   const hasData = products.length > 0;
-  const isComplete = stats.pending === 0 && stats.processing === 0 && hasData;
+  const jobComplete = isComplete || (stats.pending === 0 && stats.processing === 0 && hasData);
 
   return (
     <div className="min-h-screen bg-background">
@@ -137,21 +144,26 @@ const Index = () => {
                     <h2 className="text-xl font-semibold text-foreground">Enrichment Dashboard</h2>
                     <p className="text-sm text-muted-foreground">
                       {products.length} products • {attributes.length} attribute mappings
+                      {currentJob && (
+                        <Badge variant="outline" className="ml-2">
+                          {currentJob.status === 'processing' ? 'Processing...' : currentJob.status}
+                        </Badge>
+                      )}
                     </p>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    {!isComplete && (
+                    {!jobComplete && !isEnriching && (
                       <Button
                         onClick={startEnrichment}
-                        disabled={isEnriching || stats.pending === 0}
-                        variant={isEnriching ? 'secondary' : 'glow'}
+                        disabled={isLoading || stats.pending === 0}
+                        variant="glow"
                         size="lg"
                       >
-                        {isEnriching ? (
+                        {isLoading ? (
                           <>
-                            <div className="w-4 h-4 border-2 border-foreground/30 border-t-foreground rounded-full animate-spin" />
-                            Processing...
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Starting...
                           </>
                         ) : (
                           <>
@@ -163,7 +175,28 @@ const Index = () => {
                       </Button>
                     )}
                     
-                    {isComplete && (
+                    {isEnriching && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="lg"
+                          disabled
+                        >
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Processing ({stats.success + stats.failed}/{stats.total})
+                        </Button>
+                        <Button
+                          onClick={cancelEnrichment}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <StopCircle className="w-4 h-4" />
+                          Cancel
+                        </Button>
+                      </>
+                    )}
+                    
+                    {jobComplete && (
                       <Button onClick={downloadResults} variant="success" size="lg">
                         <Download className="w-4 h-4" />
                         Download Results
