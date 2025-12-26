@@ -42,41 +42,20 @@ export function useDeviceSession(deviceFingerprint: string | null) {
     checkDeviceStatus();
   }, [checkDeviceStatus]);
 
-  // Subscribe to device changes
+  // Poll device status periodically (avoids Realtime WebSocket dependency)
   useEffect(() => {
     if (!user || !deviceFingerprint) return;
 
-    const channel = supabase
-      .channel('device-status')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'user_devices',
-        },
-        (payload) => {
-          const data = payload.new as any;
-          // Check if this update is for our device
-          if (data.device_fingerprint === deviceFingerprint && data.user_id === user.id) {
-            if (!data.is_active || data.revoked_at) {
-              setIsRevoked(true);
-              toast.error('This device has been deactivated by an administrator.');
-              
-              setTimeout(async () => {
-                await signOut();
-                navigate('/auth');
-              }, 2000);
-            }
-          }
-        }
-      )
-      .subscribe();
+    checkDeviceStatus();
+
+    const interval = window.setInterval(() => {
+      checkDeviceStatus();
+    }, 30000);
 
     return () => {
-      supabase.removeChannel(channel);
+      window.clearInterval(interval);
     };
-  }, [user, deviceFingerprint, signOut, navigate]);
+  }, [user, deviceFingerprint, checkDeviceStatus]);
 
   return { isRevoked };
 }

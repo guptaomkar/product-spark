@@ -36,34 +36,20 @@ export function useRealtimeCredits() {
     fetchCredits();
   }, [fetchCredits]);
 
-  // Subscribe to realtime updates
+  // Poll credits periodically (avoids Realtime WebSocket dependency)
   useEffect(() => {
     if (!user) return;
 
-    const channel = supabase
-      .channel('subscription-credits')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'user_subscriptions',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const data = payload.new as any;
-          setCredits({
-            creditsRemaining: data.credits_remaining,
-            creditsUsed: data.credits_used,
-          });
-        }
-      )
-      .subscribe();
+    fetchCredits();
+
+    const interval = window.setInterval(() => {
+      fetchCredits();
+    }, 15000);
 
     return () => {
-      supabase.removeChannel(channel);
+      window.clearInterval(interval);
     };
-  }, [user]);
+  }, [user, fetchCredits]);
 
   return { credits, refreshCredits: fetchCredits };
 }
