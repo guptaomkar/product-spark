@@ -43,7 +43,7 @@ const Index = () => {
     resetEnrichment,
     downloadResults,
     clearData,
-    currentJob,
+    currentRun,
   } = useEnrichmentJob();
 
   const { trainings, fetchTrainings } = useTraining();
@@ -144,9 +144,9 @@ const Index = () => {
                     <h2 className="text-xl font-semibold text-foreground">Enrichment Dashboard</h2>
                     <p className="text-sm text-muted-foreground">
                       {products.length} products • {attributes.length} attribute mappings
-                      {currentJob && (
+                      {currentRun && (
                         <Badge variant="outline" className="ml-2">
-                          {currentJob.status === 'processing' ? 'Processing...' : currentJob.status}
+                          {currentRun.status === 'processing' ? 'Processing...' : currentRun.status}
                         </Badge>
                       )}
                     </p>
