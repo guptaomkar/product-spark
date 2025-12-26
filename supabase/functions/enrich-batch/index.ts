@@ -180,7 +180,86 @@ async function processEnrichmentRun(runId: string, concurrency: number) {
       return;
     }
 
-const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Record<string, string>; error?: string }> => {
+// Different query formats to try for better results
+    const getQueryFormats = (mfr: string, mpn: string, attrs: string[]): string[] => {
+      const attrList = attrs.join(", ");
+      return [
+        `JSON specs for ${mfr} ${mpn}: ${attrList}`,
+        `${mfr} part number ${mpn} specifications: ${attrList}`,
+        `Product specifications ${mfr} model ${mpn}: ${attrList}`,
+      ];
+    };
+
+    const fetchBatchWithRetry = async (
+      item: any, 
+      batch: string[], 
+      batchIdx: number, 
+      totalBatches: number
+    ): Promise<Record<string, string>> => {
+      const queryFormats = getQueryFormats(item.mfr || '', item.mpn || '', batch);
+      let bestResults: Record<string, string> = {};
+      let bestFilledCount = 0;
+
+      for (let attempt = 0; attempt < queryFormats.length; attempt++) {
+        const query = queryFormats[attempt];
+        
+        const payload = {
+          source: "google_ai_mode",
+          query: query,
+          geo_location: "United States",
+          parse: true,
+          render: "html",
+        };
+
+        console.log(`[enrich-batch] ${item.mpn} batch ${batchIdx + 1}/${totalBatches}, attempt ${attempt + 1}/${queryFormats.length}`);
+
+        try {
+          const response = await fetch("https://realtime.oxylabs.io/v1/queries", {
+            method: "POST",
+            headers: {
+              Authorization: `Basic ${authHeader}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const responseText = extractResponseText(data);
+            const batchResults = parseAttributeValues(responseText, batch);
+            
+            const filledCount = Object.values(batchResults).filter(v => v && v.trim() !== '').length;
+            console.log(`[enrich-batch] ${item.mpn} attempt ${attempt + 1}: ${filledCount}/${batch.length} attrs filled`);
+
+            // Keep the best result
+            if (filledCount > bestFilledCount) {
+              bestFilledCount = filledCount;
+              bestResults = batchResults;
+            }
+
+            // If we got good results (70%+), no need to retry
+            if (filledCount >= batch.length * 0.7) {
+              console.log(`[enrich-batch] ${item.mpn} batch ${batchIdx + 1}: Good results, skipping remaining attempts`);
+              break;
+            }
+          } else {
+            const errorText = await response.text();
+            console.error(`[enrich-batch] API error for ${item.mpn} attempt ${attempt + 1}:`, response.status, errorText);
+          }
+        } catch (error) {
+          console.error(`[enrich-batch] Fetch error for ${item.mpn} attempt ${attempt + 1}:`, error);
+        }
+
+        // Delay between retry attempts
+        if (attempt < queryFormats.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      return bestResults;
+    };
+
+    const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Record<string, string>; error?: string }> => {
       try {
         const categoryAttributes = getAttributesForCategory(item.category || '');
         if (categoryAttributes.length === 0) {
@@ -193,7 +272,7 @@ const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Reco
           allResults[attr] = "";
         }
 
-        const baseQueryLength = `JSON specs for ${item.mfr || ''} ${item.mpn || ''}: `.length;
+        const baseQueryLength = `JSON specs for  : `.length + (item.mfr?.length || 0) + (item.mpn?.length || 0);
         const maxAttrChars = 350 - baseQueryLength;
         
         const batches: string[][] = [];
@@ -217,40 +296,14 @@ const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Reco
 
         for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
           const batch = batches[batchIdx];
-          const query = `JSON specs for ${item.mfr || ''} ${item.mpn || ''}: ${batch.join(", ")}`;
-
-          const payload = {
-            source: "google_ai_mode",
-            query: query,
-            geo_location: "United States",
-            parse: true,
-            render: "html",
-          };
-
-          console.log(`[enrich-batch] Fetching ${item.mpn}, batch ${batchIdx + 1}/${batches.length} with ${batch.length} attrs`);
-
-          const response = await fetch("https://realtime.oxylabs.io/v1/queries", {
-            method: "POST",
-            headers: {
-              Authorization: `Basic ${authHeader}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const responseText = extractResponseText(data);
-            console.log(`[enrich-batch] ${item.mpn} batch ${batchIdx + 1} response length: ${responseText.length}`);
-            const batchResults = parseAttributeValues(responseText, batch);
-            for (const [key, value] of Object.entries(batchResults)) {
-              if (value && value !== "") {
-                allResults[key] = value;
-              }
+          
+          // Fetch with retry logic
+          const batchResults = await fetchBatchWithRetry(item, batch, batchIdx, batches.length);
+          
+          for (const [key, value] of Object.entries(batchResults)) {
+            if (value && value !== "") {
+              allResults[key] = value;
             }
-          } else {
-            const errorText = await response.text();
-            console.error(`[enrich-batch] API error for ${item.mpn} batch ${batchIdx + 1}:`, response.status, errorText);
           }
           
           // Rate limiting delay between batches
@@ -262,7 +315,7 @@ const enrichProduct = async (item: any): Promise<{ success: boolean; data?: Reco
         const totalAttrs = categoryAttributes.length;
         const fillRate = totalAttrs > 0 ? (filledCount / totalAttrs) * 100 : 0;
         
-        console.log(`[enrich-batch] ${item.mpn} result: ${filledCount}/${totalAttrs} attributes filled (${fillRate.toFixed(1)}%)`);
+        console.log(`[enrich-batch] ${item.mpn} FINAL: ${filledCount}/${totalAttrs} attributes filled (${fillRate.toFixed(1)}%)`);
 
         return { success: true, data: allResults };
       } catch (error) {
