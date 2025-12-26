@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Header } from '@/components/layout/Header';
 import { 
   Target, 
@@ -16,12 +17,222 @@ import {
   Headphones,
   ShieldCheck,
   Database,
-  Sparkles
+  Sparkles,
+  Send,
+  HelpCircle,
+  FileUp,
+  Download,
+  CreditCard,
+  Play,
+  ChevronDown
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { z } from 'zod';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+
+const contactSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
+  email: z.string().trim().email("Invalid email address").max(255, "Email must be less than 255 characters"),
+  subject: z.string().trim().max(200, "Subject must be less than 200 characters").optional(),
+  message: z.string().trim().min(1, "Message is required").max(2000, "Message must be less than 2000 characters")
+});
+
+const faqData = [
+  {
+    category: "Getting Started",
+    icon: Play,
+    color: "text-green-500",
+    bgColor: "bg-green-500/10",
+    questions: [
+      {
+        q: "How do I start using DataEnrich?",
+        a: "Simply sign up for an account, upload your product data file (CSV or Excel), select the attributes you want to enrich, and click 'Start Enrichment'. Our AI agents will automatically fetch and populate the missing data for you."
+      },
+      {
+        q: "What file formats are supported?",
+        a: "We support CSV (.csv) and Excel (.xlsx, .xls) file formats. Your file should contain columns for MPN (Manufacturer Part Number) and optionally the Manufacturer name for better accuracy."
+      },
+      {
+        q: "Do I need technical knowledge to use the platform?",
+        a: "No! DataEnrich is designed to be user-friendly. Simply upload your file, map your columns, select attributes, and let our AI do the rest. No coding or technical expertise required."
+      }
+    ]
+  },
+  {
+    category: "Data Enrichment",
+    icon: Target,
+    color: "text-blue-500",
+    bgColor: "bg-blue-500/10",
+    questions: [
+      {
+        q: "How does the enrichment process work?",
+        a: "Our platform uses multiple AI agents and APIs to search manufacturer databases, product catalogs, and trusted sources. For each product (identified by MPN), we extract the requested attributes like specifications, dimensions, certifications, images, and more."
+      },
+      {
+        q: "What attributes can be enriched?",
+        a: "You can enrich a wide variety of attributes including: Product descriptions, Technical specifications, Dimensions & weight, Images & datasheets, Certifications, Categories, and custom attributes specific to your industry."
+      },
+      {
+        q: "How accurate is the enrichment?",
+        a: "We achieve 99.5% accuracy by cross-referencing multiple sources and using AI validation. Each enriched value is verified against trusted manufacturer databases to ensure data quality."
+      },
+      {
+        q: "Can I enrich custom attributes?",
+        a: "Yes! You can define custom attributes specific to your industry needs. Contact our support team for custom attribute configuration, and we'll set up tailored enrichment rules for your catalog."
+      }
+    ]
+  },
+  {
+    category: "File Upload & Processing",
+    icon: FileUp,
+    color: "text-purple-500",
+    bgColor: "bg-purple-500/10",
+    questions: [
+      {
+        q: "How do I upload my product data?",
+        a: "Click the 'Upload File' button on the dashboard, select your CSV or Excel file, and our system will automatically detect the columns. Map the MPN and Manufacturer columns, then proceed to attribute selection."
+      },
+      {
+        q: "Is there a limit on file size or number of products?",
+        a: "File size limits depend on your subscription plan. Free trial allows up to 100 products, while paid plans support thousands of products per batch. Check the Pricing page for specific limits."
+      },
+      {
+        q: "How long does processing take?",
+        a: "Processing time varies based on the number of products and attributes. Typically, 100 products with 5 attributes take about 2-3 minutes. Our parallel processing ensures optimal speed for bulk enrichment."
+      }
+    ]
+  },
+  {
+    category: "Asset Download",
+    icon: Download,
+    color: "text-orange-500",
+    bgColor: "bg-orange-500/10",
+    questions: [
+      {
+        q: "How do I download product images and datasheets?",
+        a: "After enrichment, go to the Asset Download panel. Select the products you want, choose asset types (images, PDFs), and click 'Download'. Assets are automatically renamed using MPN and packaged into a ZIP file."
+      },
+      {
+        q: "What happens if an asset URL is broken?",
+        a: "Our system gracefully handles broken or missing URLs. Failed downloads are logged and reported, while successful assets are still packaged for download. You'll see a summary of any missing assets."
+      },
+      {
+        q: "Can I download assets in bulk?",
+        a: "Yes! Select multiple products or use 'Select All' to download assets for your entire catalog. Assets are organized by product and delivered as a compressed ZIP file for easy management."
+      }
+    ]
+  },
+  {
+    category: "Training Mode",
+    icon: Settings,
+    color: "text-cyan-500",
+    bgColor: "bg-cyan-500/10",
+    questions: [
+      {
+        q: "What is Training Mode?",
+        a: "Training Mode allows you to teach our system how to extract data from specific manufacturer websites. By defining CSS selectors for different attributes, you create custom scraping rules for better accuracy."
+      },
+      {
+        q: "How do I train a new manufacturer?",
+        a: "Enter the manufacturer name and a sample product URL. Our system will load the page, and you can click on elements to define selectors for each attribute. Save the training to apply it to all future products from that manufacturer."
+      },
+      {
+        q: "Can I edit or delete trainings?",
+        a: "Yes! Go to the Saved Trainings section to view, edit, or delete manufacturer trainings. You can update selectors if website layouts change or add new attributes to existing trainings."
+      }
+    ]
+  },
+  {
+    category: "Pricing & Credits",
+    icon: CreditCard,
+    color: "text-pink-500",
+    bgColor: "bg-pink-500/10",
+    questions: [
+      {
+        q: "How does the credit system work?",
+        a: "Each enrichment request consumes credits based on your plan. 1 credit = 1 product enrichment. Credits are allocated monthly and unused credits don't roll over. View your remaining credits in the dashboard."
+      },
+      {
+        q: "What happens when I run out of credits?",
+        a: "When credits are exhausted, you can upgrade your plan or wait for the next billing cycle. We'll notify you when credits are running low so you can plan accordingly."
+      },
+      {
+        q: "Can I upgrade or downgrade my plan?",
+        a: "Yes! You can change your plan anytime from the Settings page. Upgrades take effect immediately with prorated billing. Downgrades apply at the next billing cycle."
+      },
+      {
+        q: "Is there a free trial?",
+        a: "Yes! New users get a free trial with 10 credits to test the platform. Experience the full power of DataEnrich before committing to a paid plan."
+      }
+    ]
+  }
+];
 
 const About = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    subject: '',
+    message: ''
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrors({});
+
+    const result = contactSchema.safeParse(formData);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach(err => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.from('contact_submissions').insert({
+        name: result.data.name,
+        email: result.data.email,
+        subject: result.data.subject || null,
+        message: result.data.message
+      });
+
+      if (error) throw error;
+
+      toast.success('Message sent successfully! We\'ll get back to you within 24 hours.');
+      setFormData({ name: '', email: '', subject: '', message: '' });
+    } catch (error) {
+      toast.error('Failed to send message. Please try again or email us directly.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -43,11 +254,10 @@ const About = () => {
           </p>
         </div>
 
-        {/* Data Privacy & Security Section - NEW HIGHLIGHTED */}
+        {/* Data Privacy & Security Section */}
         <section className="mb-20">
           <div className="max-w-5xl mx-auto">
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-teal-500/10 border-2 border-green-500/30 p-8 md:p-12">
-              {/* Animated background elements */}
               <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/10 rounded-full blur-3xl animate-pulse" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
               
@@ -93,7 +303,6 @@ const About = () => {
                   
                   <div className="flex items-center justify-center">
                     <div className="relative">
-                      {/* Animated shield diagram */}
                       <div className="w-48 h-48 rounded-full border-4 border-dashed border-green-500/30 flex items-center justify-center animate-[spin_20s_linear_infinite]">
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2">
                           <Lock className="w-6 h-6 text-green-500" />
@@ -121,11 +330,10 @@ const About = () => {
           </div>
         </section>
 
-        {/* Customization Section - NEW HIGHLIGHTED */}
+        {/* Customization Section */}
         <section className="mb-20">
           <div className="max-w-5xl mx-auto">
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 via-violet-500/5 to-indigo-500/10 border-2 border-purple-500/30 p-8 md:p-12">
-              {/* Animated background elements */}
               <div className="absolute top-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
               <div className="absolute bottom-0 right-0 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1.5s' }} />
               
@@ -182,11 +390,10 @@ const About = () => {
           </div>
         </section>
 
-        {/* Support Section - NEW HIGHLIGHTED */}
+        {/* Support Section */}
         <section className="mb-20">
           <div className="max-w-5xl mx-auto">
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-sky-500/10 border-2 border-blue-500/30 p-8 md:p-12">
-              {/* Animated background elements */}
               <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '0.5s' }} />
               
@@ -244,6 +451,142 @@ const About = () => {
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* FAQ Section */}
+        <section className="mb-20">
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-4">
+                <HelpCircle className="w-4 h-4 text-primary" />
+                <span className="text-sm font-medium text-primary">FAQ</span>
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+                Frequently Asked Questions
+              </h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Everything you need to know about using DataEnrich. Can't find what you're looking for? 
+                Contact our support team.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {faqData.map((category, idx) => (
+                <div key={idx} className="p-6 rounded-2xl bg-card border border-border hover:border-primary/20 transition-colors">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-10 h-10 rounded-lg ${category.bgColor} flex items-center justify-center`}>
+                      <category.icon className={`w-5 h-5 ${category.color}`} />
+                    </div>
+                    <h3 className="text-lg font-semibold text-foreground">{category.category}</h3>
+                  </div>
+                  
+                  <Accordion type="single" collapsible className="space-y-2">
+                    {category.questions.map((faq, faqIdx) => (
+                      <AccordionItem key={faqIdx} value={`${idx}-${faqIdx}`} className="border-border/50">
+                        <AccordionTrigger className="text-sm text-left hover:no-underline py-3">
+                          {faq.q}
+                        </AccordionTrigger>
+                        <AccordionContent className="text-sm text-muted-foreground pb-3">
+                          {faq.a}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Contact Form Section */}
+        <section className="mb-20">
+          <div className="max-w-3xl mx-auto">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-accent/10 border-2 border-primary/30 p-8 md:p-12">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl animate-pulse" />
+              <div className="absolute bottom-0 left-0 w-48 h-48 bg-accent/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+              
+              <div className="relative z-10">
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 border border-primary/30 mb-4">
+                    <Send className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">Contact Us</span>
+                  </div>
+                  <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">Get in Touch</h2>
+                  <p className="text-muted-foreground">
+                    Have questions or need assistance? Fill out the form below and we'll respond within 24 hours.
+                  </p>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Name *</Label>
+                      <Input
+                        id="name"
+                        name="name"
+                        placeholder="Your name"
+                        value={formData.name}
+                        onChange={handleInputChange}
+                        className={errors.name ? 'border-destructive' : ''}
+                      />
+                      {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email *</Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder="your@email.com"
+                        value={formData.email}
+                        onChange={handleInputChange}
+                        className={errors.email ? 'border-destructive' : ''}
+                      />
+                      {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Subject</Label>
+                    <Input
+                      id="subject"
+                      name="subject"
+                      placeholder="What's this about?"
+                      value={formData.subject}
+                      onChange={handleInputChange}
+                      className={errors.subject ? 'border-destructive' : ''}
+                    />
+                    {errors.subject && <p className="text-sm text-destructive">{errors.subject}</p>}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="message">Message *</Label>
+                    <Textarea
+                      id="message"
+                      name="message"
+                      placeholder="Tell us how we can help..."
+                      rows={5}
+                      value={formData.message}
+                      onChange={handleInputChange}
+                      className={errors.message ? 'border-destructive' : ''}
+                    />
+                    {errors.message && <p className="text-sm text-destructive">{errors.message}</p>}
+                  </div>
+                  
+                  <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>Sending...</>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Send Message
+                      </>
+                    )}
+                  </Button>
+                </form>
               </div>
             </div>
           </div>
