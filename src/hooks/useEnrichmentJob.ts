@@ -3,7 +3,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { AttributeDefinition, EnrichmentStats, FileValidationResult, Product } from '@/types/enrichment';
-import type { Json } from '@/integrations/supabase/types';
 import { exportToExcel } from '@/lib/fileParser';
 import { useSubscription } from '@/hooks/useSubscription';
 
@@ -46,7 +45,7 @@ function mapDbItemToEnrichmentItem(item: any): EnrichmentItem {
 
 export function useEnrichmentJob() {
   const { user } = useAuth();
-  const { subscription, consumeCredit: consumeSubscriptionCredit, refreshSubscription } = useSubscription();
+  const { refreshSubscription } = useSubscription();
   const [currentRun, setCurrentRun] = useState<EnrichmentRun | null>(null);
   const [runItems, setRunItems] = useState<EnrichmentItem[]>([]);
   const [uploadedProducts, setUploadedProducts] = useState<Product[]>([]);
@@ -236,120 +235,67 @@ export function useEnrichmentJob() {
       return;
     }
 
-    if (!subscription) {
-      toast.error('Subscription is still loading. Please try again in a moment.');
-      return;
-    }
-
-    if (subscription.status !== 'active') {
-      toast.error('No active subscription found');
-      return;
-    }
-
-    const creditsNeeded = uploadedProducts.length;
-    if (subscription.creditsRemaining < creditsNeeded) {
-      toast.error(`Insufficient credits: need ${creditsNeeded}, have ${subscription.creditsRemaining}`);
-      return;
-    }
-
     setIsLoading(true);
     try {
       console.log('[useEnrichmentJob] Starting enrichment with', uploadedProducts.length, 'products');
 
-      // 1. Create run in user_enrichment_data
-      const { data: run, error: runError } = await supabase
-        .from('user_enrichment_data')
-        .insert({
-          user_id: user.id,
-          file_name: `enrichment_${new Date().toISOString().split('T')[0]}`,
-          status: 'pending',
-          products_count: uploadedProducts.length,
-          attributes: JSON.parse(JSON.stringify(attributes)) as Json,
-          results: [],
-          total_count: uploadedProducts.length,
-          current_index: 0,
-          success_count: 0,
-          failed_count: 0,
-        })
-        .select()
-        .single();
+      // Call the single backend endpoint that handles everything
+      const { data: invokeData, error: invokeError } = await supabase.functions.invoke('start-enrichment-run', {
+        body: {
+          products: uploadedProducts.map(p => ({
+            id: p.id,
+            mfr: p.mfr,
+            mpn: p.mpn,
+            category: p.category,
+          })),
+          attributes: attributes,
+          fileName: `enrichment_${new Date().toISOString().split('T')[0]}`,
+        },
+      });
 
-      if (runError || !run) {
-        console.error('[useEnrichmentJob] Failed to create run:', runError);
-        throw new Error(runError?.message || 'Failed to create run');
-      }
-
-      console.log('[useEnrichmentJob] Run created:', run.id);
-
-      // 2. Insert all products as run items
-      const itemsToInsert = uploadedProducts.map((product) => ({
-        run_id: run.id,
-        product_id: product.id,
-        mfr: product.mfr,
-        mpn: product.mpn,
-        category: product.category,
-        status: 'pending',
-      }));
-
-      const { error: itemsError } = await supabase.from('enrichment_run_items').insert(itemsToInsert);
-
-      if (itemsError) {
-        console.error('[useEnrichmentJob] Failed to create items:', itemsError);
-        throw new Error(itemsError.message || 'Failed to create items');
-      }
-
-      console.log('[useEnrichmentJob] Items created:', itemsToInsert.length);
-
-      // 3. Consume credits (atomic) BEFORE starting background processing
-      const charged = await consumeSubscriptionCredit('enrichment', creditsNeeded);
-      if (!charged) {
-        await supabase.from('enrichment_run_items').delete().eq('run_id', run.id);
-        await supabase.from('user_enrichment_data').delete().eq('id', run.id);
-        toast.error('Failed to deduct credits. Enrichment was not started.');
+      if (invokeError) {
+        console.error('[useEnrichmentJob] Error invoking start-enrichment-run:', invokeError);
+        toast.error('Error starting enrichment: ' + invokeError.message);
         return;
       }
-      refreshSubscription();
 
-      // 4. Set local state
+      if (!invokeData?.success) {
+        console.error('[useEnrichmentJob] Start run failed:', invokeData?.error);
+        toast.error(invokeData?.error || 'Failed to start enrichment');
+        return;
+      }
+
+      const runId = invokeData.runId;
+      console.log('[useEnrichmentJob] Run started:', runId);
+
+      // Set local state to track the run
       setCurrentRun({
-        id: run.id,
-        fileName: run.file_name,
+        id: runId,
+        fileName: `enrichment_${new Date().toISOString().split('T')[0]}`,
         status: 'pending',
         attributes: attributes,
         currentIndex: 0,
         totalCount: uploadedProducts.length,
         successCount: 0,
         failedCount: 0,
-        createdAt: run.created_at,
+        createdAt: new Date().toISOString(),
       });
       lastRunStatusRef.current = 'pending';
 
       setRunItems(
-        itemsToInsert.slice(0, 200).map((item, idx) => ({
+        uploadedProducts.slice(0, 200).map((product, idx) => ({
           id: `temp-${idx}`,
-          productId: item.product_id,
-          mfr: item.mfr,
-          mpn: item.mpn,
-          category: item.category,
+          productId: product.id,
+          mfr: product.mfr,
+          mpn: product.mpn,
+          category: product.category,
           status: 'pending',
         }))
       );
 
-      // 5. Trigger background processing
-      console.log('[useEnrichmentJob] Invoking enrich-batch edge function');
-      const { data: invokeData, error: invokeError } = await supabase.functions.invoke('enrich-batch', {
-        body: { runId: run.id, concurrency: 5 },
-      });
+      // Refresh subscription to show updated credits
+      refreshSubscription();
 
-      if (invokeError) {
-        console.error('[useEnrichmentJob] Error invoking enrich-batch:', invokeError);
-        toast.error('Error starting background processing: ' + invokeError.message);
-        // Mark run as failed
-        await supabase.from('user_enrichment_data').update({ status: 'failed' }).eq('id', run.id);
-        return;
-      }
-
-      console.log('[useEnrichmentJob] Edge function invoked successfully:', invokeData);
       toast.success('Enrichment started! Processing continues even if you close this tab.');
     } catch (error) {
       console.error('[useEnrichmentJob] Error starting enrichment:', error);
@@ -357,7 +303,7 @@ export function useEnrichmentJob() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, uploadedProducts, attributes, subscription, consumeSubscriptionCredit, refreshSubscription]);
+  }, [user, uploadedProducts, attributes, refreshSubscription]);
 
   const cancelEnrichment = useCallback(async () => {
     if (!currentRun?.id) return;
