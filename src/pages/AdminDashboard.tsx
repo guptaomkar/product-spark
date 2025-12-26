@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { AdminCharts } from '@/components/admin/AdminCharts';
 import { PlanManagement } from '@/components/admin/PlanManagement';
+import { AdminContactSubmissions } from '@/components/admin/AdminContactSubmissions';
 import { 
   Shield, 
   Users, 
@@ -32,7 +33,8 @@ import {
   Download,
   Filter,
   UserCheck,
-  UserX
+  UserX,
+  MessageSquare
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -323,77 +325,77 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Page Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-              <Shield className="w-8 h-8 text-primary" />
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-3">
+              <Shield className="w-7 h-7 sm:w-8 sm:h-8 text-primary" />
               Admin Dashboard
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-sm sm:text-base text-muted-foreground mt-1">
               Manage users, subscriptions, and platform settings
             </p>
           </div>
-          <Button variant="outline" onClick={() => navigate('/admin/settings')}>
+          <Button variant="outline" size="sm" onClick={() => navigate('/admin/settings')} className="self-start sm:self-auto">
             <Settings className="w-4 h-4" />
-            Settings
+            <span className="sm:inline">Settings</span>
           </Button>
         </div>
 
         {/* Stats Grid */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6 mb-6 sm:mb-8">
           <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                Total Users
+            <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardDescription className="flex items-center gap-2 text-xs sm:text-sm">
+                <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Total</span> Users
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <span className="text-3xl font-bold text-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <span className="text-xl sm:text-3xl font-bold text-foreground">
                 {stats?.totalUsers || 0}
               </span>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <CreditCard className="w-4 h-4" />
-                Active Subscriptions
+            <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardDescription className="flex items-center gap-2 text-xs sm:text-sm">
+                <CreditCard className="w-3 h-3 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Active</span> Subs
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <span className="text-3xl font-bold text-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <span className="text-xl sm:text-3xl font-bold text-foreground">
                 {stats?.activeSubscriptions || 0}
               </span>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
-                Total Revenue
+            <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardDescription className="flex items-center gap-2 text-xs sm:text-sm">
+                <DollarSign className="w-3 h-3 sm:w-4 sm:h-4" />
+                Revenue
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <span className="text-3xl font-bold text-foreground">
-                ₹{(stats?.totalRevenue || 0).toLocaleString()}
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <span className="text-xl sm:text-3xl font-bold text-foreground">
+                ₹{((stats?.totalRevenue || 0) / 1000).toFixed(1)}k
               </span>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
-              <CardDescription className="flex items-center gap-2">
-                <Activity className="w-4 h-4" />
-                Total Requests
+            <CardHeader className="pb-2 p-3 sm:p-6 sm:pb-2">
+              <CardDescription className="flex items-center gap-2 text-xs sm:text-sm">
+                <Activity className="w-3 h-3 sm:w-4 sm:h-4" />
+                Requests
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <span className="text-3xl font-bold text-foreground">
+            <CardContent className="p-3 pt-0 sm:p-6 sm:pt-0">
+              <span className="text-xl sm:text-3xl font-bold text-foreground">
                 {stats?.totalRequests || 0}
               </span>
             </CardContent>
@@ -411,46 +413,51 @@ export default function AdminDashboard() {
         )}
 
         {/* Plan Management Section */}
-        <div className="mb-8">
+        <div className="mb-6 sm:mb-8">
           <PlanManagement />
+        </div>
+
+        {/* Contact Submissions Section */}
+        <div className="mb-6 sm:mb-8">
+          <AdminContactSubmissions />
         </div>
 
         {/* Users Table with Tabs */}
         <Card>
-          <CardHeader>
+          <CardHeader className="p-4 sm:p-6">
             <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
-                  <CardTitle>Users</CardTitle>
-                  <CardDescription>Manage user accounts and subscriptions</CardDescription>
+                  <CardTitle className="text-lg sm:text-xl">Users</CardTitle>
+                  <CardDescription className="text-sm">Manage user accounts and subscriptions</CardDescription>
                 </div>
-                <Button variant="outline" onClick={handleExportUsers}>
+                <Button variant="outline" size="sm" onClick={handleExportUsers} className="self-start sm:self-auto">
                   <Download className="w-4 h-4 mr-2" />
-                  Export to Excel
+                  <span className="hidden sm:inline">Export to </span>Excel
                 </Button>
               </div>
               
               {/* Tabs */}
               <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList>
-                  <TabsTrigger value="all" className="flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    All Users ({users.length})
+                <TabsList className="w-full sm:w-auto grid grid-cols-3 sm:flex">
+                  <TabsTrigger value="all" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-4">
+                    <Users className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">All</span> ({users.length})
                   </TabsTrigger>
-                  <TabsTrigger value="trial" className="flex items-center gap-2">
-                    <UserX className="w-4 h-4" />
-                    Trial Users ({stats?.trialUsers || 0})
+                  <TabsTrigger value="trial" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-4">
+                    <UserX className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Trial</span> ({stats?.trialUsers || 0})
                   </TabsTrigger>
-                  <TabsTrigger value="subscribed" className="flex items-center gap-2">
-                    <UserCheck className="w-4 h-4" />
-                    Subscribed ({stats?.subscribedUsers || 0})
+                  <TabsTrigger value="subscribed" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm px-2 sm:px-4">
+                    <UserCheck className="w-3 h-3 sm:w-4 sm:h-4" />
+                    <span className="hidden sm:inline">Paid</span> ({stats?.subscribedUsers || 0})
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
               
               {/* Filters */}
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="relative flex-1 min-w-[200px]">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
                     placeholder="Search users..."
@@ -461,9 +468,9 @@ export default function AdminDashboard() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <Filter className="w-4 h-4 text-muted-foreground" />
+                  <Filter className="w-4 h-4 text-muted-foreground hidden sm:block" />
                   <Select value={planFilter} onValueChange={setPlanFilter}>
-                    <SelectTrigger className="w-[140px]">
+                    <SelectTrigger className="w-full sm:w-[130px]">
                       <SelectValue placeholder="Plan" />
                     </SelectTrigger>
                     <SelectContent>
@@ -476,7 +483,7 @@ export default function AdminDashboard() {
                   </Select>
                   
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-[140px]">
+                    <SelectTrigger className="w-full sm:w-[130px]">
                       <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -490,8 +497,8 @@ export default function AdminDashboard() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
+          <CardContent className="p-4 sm:p-6 pt-0 sm:pt-0">
+            <div className="space-y-2 sm:space-y-3">
               {filteredUsers.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   No users found
@@ -500,43 +507,78 @@ export default function AdminDashboard() {
                 filteredUsers.map((u) => (
                   <div 
                     key={u.id} 
-                    className="flex items-center justify-between p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                    className="p-3 sm:p-4 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer border border-transparent hover:border-border"
                     onClick={() => navigate(`/admin/user/${u.id}`)}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                        <span className="text-lg font-medium text-primary">
-                          {u.email[0].toUpperCase()}
-                        </span>
+                    {/* Mobile layout */}
+                    <div className="flex flex-col gap-3 sm:hidden">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+                            <span className="text-sm font-medium text-primary">
+                              {u.email[0].toUpperCase()}
+                            </span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground text-sm truncate max-w-[180px]">{u.email}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {u.fullName || 'No name'}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant={u.subscription?.status === 'active' ? 'default' : 'secondary'} className="text-xs">
+                          {u.subscription?.planName || 'No plan'}
+                        </Badge>
                       </div>
-                      <div>
-                        <p className="font-medium text-foreground">{u.email}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {u.fullName || 'No name'} • Joined {format(new Date(u.createdAt), 'MMM dd, yyyy')}
-                        </p>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <div className="flex items-center gap-3">
+                          <span>{u.subscription?.creditsRemaining || 0} credits</span>
+                          <span className="flex items-center gap-1">
+                            <Smartphone className="w-3 h-3" />
+                            {u.activeDevicesCount}/{getEffectiveMaxDevices(u)}
+                          </span>
+                        </div>
+                        <ChevronRight className="w-4 h-4" />
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <Badge variant={u.subscription?.status === 'active' ? 'default' : 'secondary'}>
-                          {u.subscription?.planName || 'No plan'}
-                        </Badge>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {u.subscription?.creditsRemaining || 0} credits left
-                        </p>
+                    {/* Desktop layout */}
+                    <div className="hidden sm:flex sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                          <span className="text-lg font-medium text-primary">
+                            {u.email[0].toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">{u.email}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {u.fullName || 'No name'} • Joined {format(new Date(u.createdAt), 'MMM dd, yyyy')}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground" title="Active / Max Devices">
-                        <Smartphone className="w-4 h-4" />
-                        <span className="text-sm">
-                          {u.activeDevicesCount}/{getEffectiveMaxDevices(u)}
-                        </span>
+                      
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <Badge variant={u.subscription?.status === 'active' ? 'default' : 'secondary'}>
+                            {u.subscription?.planName || 'No plan'}
+                          </Badge>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {u.subscription?.creditsRemaining || 0} credits left
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground" title="Active / Max Devices">
+                          <Smartphone className="w-4 h-4" />
+                          <span className="text-sm">
+                            {u.activeDevicesCount}/{getEffectiveMaxDevices(u)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground" title="Total Requests">
+                          <TrendingUp className="w-4 h-4" />
+                          <span className="text-sm">{u.totalRequests}</span>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground" />
                       </div>
-                      <div className="flex items-center gap-2 text-muted-foreground" title="Total Requests">
-                        <TrendingUp className="w-4 h-4" />
-                        <span className="text-sm">{u.totalRequests}</span>
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
                     </div>
                   </div>
                 ))
